@@ -40,6 +40,15 @@ dependencies = [
     "numpy~=1.24",
 ]
 
+[project.optional-dependencies]
+notebooks = [
+    "matplotlib~=3.7",
+    "jupyter~=1.0",
+]
+test = [
+    "pytest~=8.0",
+]
+
 [project.urls]
 Homepage = "https://github.com/ayushtripathi955/main-street-marketplace-toolkit"
 Repository = "https://github.com/ayushtripathi955/main-street-marketplace-toolkit"
