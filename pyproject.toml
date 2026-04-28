@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "msmt"
+version = "0.1.0"
+description = "Main Street Marketplace Toolkit — open, non-proprietary marketplace intelligence for U.S. small businesses."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Ayush Tripathi" },
+]
+keywords = [
+    "marketplace",
+    "ecommerce",
+    "small-business",
+    "forecasting",
+    "supply-chain",
+    "smb",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+]
+dependencies = [
+    "pandas~=2.0",
+    "numpy~=1.24",
+]
+
+[project.urls]
+Homepage = "https://github.com/ayushtripathi955/main-street-marketplace-toolkit"
+Repository = "https://github.com/ayushtripathi955/main-street-marketplace-toolkit"
+Issues = "https://github.com/ayushtripathi955/main-street-marketplace-toolkit/issues"
+
+[tool.setuptools.packages.find]
+include = ["msmt*"]
+exclude = ["tests*", "notebooks*", "examples*", "app*", "docs*"]
