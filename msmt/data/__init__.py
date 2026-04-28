@@ -7,6 +7,7 @@ real-world seller dataset.
 """
 
 from msmt.data.synthetic import (
+    PATTERN_CODES,
     PATTERNS,
     generate_holiday_spike,
     generate_intermittent,
@@ -18,6 +19,7 @@ from msmt.data.synthetic import (
 
 __all__ = [
     "PATTERNS",
+    "PATTERN_CODES",
     "generate_seller_data",
     "generate_smooth",
     "generate_weekly_seasonal",

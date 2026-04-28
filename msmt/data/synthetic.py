@@ -45,6 +45,14 @@ PATTERNS: tuple[str, ...] = (
     "new_sku",
 )
 
+PATTERN_CODES: dict[str, str] = {
+    "smooth": "SM",
+    "weekly_seasonal": "WS",
+    "holiday_spike": "HS",
+    "intermittent": "IM",
+    "new_sku": "NS",
+}
+
 _CATEGORIES: tuple[str, ...] = (
     "Home & Kitchen",
     "Beauty & Personal Care",
@@ -193,7 +201,7 @@ def _date_index(n_days: int, end_date: Optional[str] = None) -> pd.DatetimeIndex
 
 
 def generate_smooth(
-    sku_id: str = "SKU-SMOOTH-0001",
+    sku_id: str = "SKU-SM-0001",
     n_days: int = 365,
     seed: _RngLike = 42,
     end_date: Optional[str] = None,
@@ -228,7 +236,7 @@ def generate_smooth(
 
 
 def generate_weekly_seasonal(
-    sku_id: str = "SKU-WEEKLY-0001",
+    sku_id: str = "SKU-WS-0001",
     n_days: int = 365,
     seed: _RngLike = 42,
     end_date: Optional[str] = None,
@@ -272,7 +280,7 @@ def generate_weekly_seasonal(
 
 
 def generate_holiday_spike(
-    sku_id: str = "SKU-HOLIDAY-0001",
+    sku_id: str = "SKU-HS-0001",
     n_days: int = 365,
     seed: _RngLike = 42,
     end_date: Optional[str] = None,
@@ -337,7 +345,7 @@ def generate_holiday_spike(
 
 
 def generate_intermittent(
-    sku_id: str = "SKU-LUMPY-0001",
+    sku_id: str = "SKU-IM-0001",
     n_days: int = 365,
     seed: _RngLike = 42,
     end_date: Optional[str] = None,
@@ -383,7 +391,7 @@ def generate_intermittent(
 
 
 def generate_new_sku(
-    sku_id: str = "SKU-NEW-0001",
+    sku_id: str = "SKU-NS-0001",
     n_days: int = 365,
     seed: _RngLike = 42,
     end_date: Optional[str] = None,
@@ -564,8 +572,9 @@ def generate_seller_data(
     frames: list[pd.DataFrame] = []
     sku_counter = 1
     for pattern in PATTERNS:
+        code = PATTERN_CODES[pattern]
         for _ in range(counts.get(pattern, 0)):
-            sku_id = f"SKU-{pattern.upper()}-{sku_counter:04d}"
+            sku_id = f"SKU-{code}-{sku_counter:04d}"
             sku_counter += 1
             child_seed = int(rng.integers(0, 2**31 - 1))
             df = pattern_to_fn[pattern](
