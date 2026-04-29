@@ -45,6 +45,10 @@ notebooks = [
     "matplotlib~=3.7",
     "jupyter~=1.0",
 ]
+forecasting = [
+    "statsforecast~=1.7",
+    "prophet~=1.1",
+]
 test = [
     "pytest~=8.0",
 ]
