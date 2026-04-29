@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "msmt"
-version = "0.1.0"
+version = "0.5.0"
 description = "Main Street Marketplace Toolkit — open, non-proprietary marketplace intelligence for U.S. small businesses."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -48,6 +48,10 @@ notebooks = [
 forecasting = [
     "statsforecast~=1.7",
     "prophet~=1.1",
+]
+app = [
+    "streamlit~=1.43",
+    "matplotlib~=3.7",
 ]
 test = [
     "pytest~=8.0",
