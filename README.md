@@ -41,35 +41,68 @@ permission.
 The toolkit is organized around three problems every marketplace seller
 runs into, regardless of size:
 
-1. **Marketplace integrity** (`msmt.integrity`) — Spot listing health,
-   review-pattern, and content-quality issues that put a seller at risk
-   of suppression or buyer-trust erosion. *(Built later in the series.)*
-2. **Supply resilience** (`msmt.resilience`) — Translate lead times,
-   stock-on-hand, and demand variability into stockout risk and reorder
-   guardrails a non-specialist can actually act on. *(Built later in the
-   series.)*
-3. **Forecasting with guardrails** (`msmt.forecasting`) — Forecast
-   short-horizon demand for the five archetypes small sellers actually
-   see, with explicit uncertainty and "don't trust this forecast"
-   warnings when history is too short or too lumpy. *(Built later in the
-   series.)*
+1. **Marketplace integrity** (`msmt.integrity`) — Score a seller against
+   ten fulfillment, post-purchase, and content signals; surface
+   suppression risk and the top issues to fix. Includes a catalog
+   concentration audit using the DOJ Herfindahl-Hirschman thresholds.
+2. **Supply resilience** (`msmt.resilience`) — Classify each SKU's
+   demand pattern, compute safety stock and reorder points, and rank
+   the catalog by current stockout risk — including the platform
+   suppression tail.
+3. **Forecasting with guardrails** (`msmt.forecasting`) — Auto-select a
+   forecasting method per SKU (six baselines, Croston for intermittent
+   demand, Prophet for holiday-spike SKUs with a numpy fallback) and
+   wrap the result in five plain-language guardrails that tell a
+   counselor when to trust it.
 
-Shared utilities live under `msmt.data` (synthetic data generation,
-shipped today) and `msmt.reports` (notebook and markdown reporting
-helpers, added when the modules above land).
+Shared utilities live under `msmt.data` (synthetic data generation).
 
-## Status
+## Running the app
 
-This is **Day 1** of a four-day initial build. What ships in this
-release:
+The toolkit ships with an interactive Streamlit app that exposes all
+three modules to a non-technical audience — the primary artifact for
+SBDC counselors, state commerce program staff, and SMB sellers who
+don't want to read Python:
 
-- `msmt.data.synthetic` — a reproducible synthetic seller data
-  generator covering all five demand archetypes the toolkit targets.
+```bash
+pip install -e ".[app,forecasting]"
+streamlit run app/streamlit_app.py
+```
 
-The integrity, resilience, and forecasting modules will follow in later
-sessions and will all consume the same synthetic data interface, so
-examples and tests stay end-to-end runnable without anyone needing to
-share real seller data.
+Then open the URL Streamlit prints (typically `http://localhost:8501`)
+and pick a module from the sidebar. Every page runs on synthetic data
+generated in-memory; the app does not read or write any files and does
+not call any external APIs.
+
+The four pages mirror the modules:
+
+* **Home** — what each pillar does, with links into the modules.
+* **Marketplace Integrity** — score a demo seller or enter your own
+  metrics; see the scorecard, top issues, recommendations, and a
+  catalog concentration audit.
+* **Supply Resilience** — generate a synthetic catalog, see the
+  stockout-risk heatmap, and use the platform-suppression cost
+  calculator.
+* **Demand Forecasting** — pick a demand pattern, see the auto-
+  selected method's forecast and 95% prediction interval, and watch
+  the five guardrails fire (or not).
+
+> Screenshot placeholder — running the app locally and taking
+> screenshots of each page is the recommended next step.
+
+## Walkthrough notebooks
+
+For readers who want to see the toolkit run end-to-end in code, the
+`notebooks/` folder ships four walkthroughs:
+
+* `01_marketplace_integrity_walkthrough.ipynb`
+* `02_supply_resilience_walkthrough.ipynb`
+* `03_forecasting_guardrails_walkthrough.ipynb`
+* `04_end_to_end_case_study.ipynb` — the capstone: a single 50-SKU
+  synthetic catalog runs through all three modules to produce a
+  combined SMB diagnostic report.
+
+All notebooks ship pre-executed so they render with charts on GitHub.
 
 ## Quickstart
 
@@ -80,6 +113,17 @@ git clone https://github.com/ayushtripathi955/main-street-marketplace-toolkit.gi
 cd main-street-marketplace-toolkit
 pip install -e .
 ```
+
+The library itself only depends on `pandas` and `numpy`. Optional
+extras pull in the rest of the stack only if you need them:
+
+* `pip install -e ".[forecasting]"` — Prophet and statsforecast for
+  holiday-spike forecasting.
+* `pip install -e ".[notebooks]"` — Jupyter and matplotlib for the
+  walkthrough notebooks.
+* `pip install -e ".[app]"` — Streamlit and matplotlib for the
+  interactive app.
+* `pip install -e ".[test]"` — pytest for the test suite.
 
 Generate a synthetic multi-SKU dataset:
 
