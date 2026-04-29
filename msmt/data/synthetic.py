@@ -285,7 +285,7 @@ def generate_holiday_spike(
     seed: _RngLike = 42,
     end_date: Optional[str] = None,
     mean_units: float = 10.0,
-    spike_multiplier: float = 5.0,
+    spike_multiplier: float = 10.0,
 ) -> pd.DataFrame:
     """Generate one SKU with predictable holiday-window spikes.
 
@@ -329,7 +329,7 @@ def generate_holiday_spike(
             holiday_anchors.append(black_friday + pd.Timedelta(days=3))
         holiday_anchors.append(pd.Timestamp(f"{year}-12-15"))
 
-    sigma_days = 3.0
+    sigma_days = 3.5
     day_index = np.arange(n_days)
     for anchor in holiday_anchors:
         if anchor < dates[0] or anchor > dates[-1]:
