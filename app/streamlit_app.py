@@ -11,17 +11,19 @@ Run from the repo root with::
 
 All data shown by the app is **synthetic**, generated in-memory from
 ``msmt.data.generate_seller_data``. The app does not read or write any
-file paths and does not call any external APIs.
+file paths (other than the brand assets it ships with) and does not
+call any external APIs.
 """
 
 from __future__ import annotations
 
 import warnings
-from typing import Any, Dict
+from pathlib import Path
+from typing import Any, Dict, Optional
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 
 warnings.filterwarnings("ignore")
@@ -29,12 +31,12 @@ warnings.filterwarnings("ignore")
 from msmt.data import PATTERNS, generate_seller_data
 from msmt.forecasting import (
     auto_select_method,
+    croston_forecast,
     holt_winters_forecast,
     holts_forecast,
     moving_average_forecast,
     naive_forecast,
     prophet_forecast,
-    croston_forecast,
     run_forecast,
     run_guardrails,
     seasonal_naive_forecast,
@@ -52,21 +54,218 @@ from msmt.resilience import (
 )
 
 
+# ---------------------------------------------------------------------------
+# Brand tokens (mirrors brand/tokens.json — kept inline so the app has zero
+# file-read dependencies beyond the logo).
+# ---------------------------------------------------------------------------
+
+COLOR_PRIMARY = "#1B4F8A"
+COLOR_PRIMARY_LIGHT = "#2D6DB5"
+COLOR_PRIMARY_DARK = "#0F3060"
+COLOR_ACCENT = "#E85D26"
+COLOR_SUCCESS = "#2E7D32"
+COLOR_WARNING = "#F57C00"
+COLOR_DANGER = "#C62828"
+COLOR_NEUTRAL_100 = "#FFFFFF"
+COLOR_NEUTRAL_200 = "#F5F6F8"
+COLOR_NEUTRAL_300 = "#E8EAED"
+COLOR_NEUTRAL_600 = "#5F6368"
+COLOR_NEUTRAL_900 = "#1A1A2E"
+
+CHART_COLORS = ["#1B4F8A", "#E85D26", "#2E7D32", "#7B1FA2", "#F57C00"]
+
+LEVEL_COLORS = {
+    "critical": COLOR_DANGER,
+    "high": "#E67E22",
+    "medium": "#F1C40F",
+    "low": COLOR_SUCCESS,
+    "good": COLOR_SUCCESS,
+    "fair": "#F1C40F",
+    "poor": COLOR_DANGER,
+    "moderate": "#F1C40F",
+}
+
+GITHUB_URL = "https://github.com/ayushtripathi955/main-street-marketplace-toolkit"
+ARTICLES_URL = "#"
+WEBSITE_URL = "https://mainstreetmarketplace.org"
+
 PAGE_HOME = "Home"
 PAGE_INTEGRITY = "Marketplace Integrity"
 PAGE_RESILIENCE = "Supply Resilience"
 PAGE_FORECAST = "Demand Forecasting"
 
-LEVEL_COLORS = {
-    "critical": "#c0392b",
-    "high": "#e67e22",
-    "medium": "#f1c40f",
-    "low": "#27ae60",
-    "good": "#27ae60",
-    "fair": "#f1c40f",
-    "poor": "#c0392b",
-    "moderate": "#f1c40f",
-}
+PLOTLY_CONFIG = {"displayModeBar": False, "responsive": True}
+
+LOGO_PATH = Path(__file__).resolve().parent.parent / "brand" / "logo.svg"
+
+
+# ---------------------------------------------------------------------------
+# Global CSS injection
+# ---------------------------------------------------------------------------
+
+
+def inject_css() -> None:
+    """Inject the global stylesheet that gives the app its branded look."""
+    css = f"""
+    <style>
+        html, body, [class*="css"] {{
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+        }}
+        .block-container {{
+            max-width: 980px;
+            padding-top: 2rem;
+            padding-bottom: 4rem;
+        }}
+        section[data-testid="stSidebar"] {{
+            background-color: {COLOR_NEUTRAL_200};
+            border-right: 1px solid {COLOR_NEUTRAL_300};
+        }}
+        section[data-testid="stSidebar"] .sidebar-logo {{
+            color: {COLOR_PRIMARY};
+            margin-bottom: 0.5rem;
+        }}
+        section[data-testid="stSidebar"] .sidebar-title {{
+            color: {COLOR_PRIMARY};
+            font-weight: 700;
+            font-size: 1.05rem;
+            line-height: 1.3;
+        }}
+        section[data-testid="stSidebar"] .sidebar-subtitle {{
+            color: {COLOR_NEUTRAL_600};
+            font-size: 0.85rem;
+            margin-bottom: 1rem;
+        }}
+        section[data-testid="stSidebar"] .sidebar-footer {{
+            color: {COLOR_NEUTRAL_600};
+            font-size: 0.8rem;
+            line-height: 1.5;
+        }}
+        section[data-testid="stSidebar"] .sidebar-footer a {{
+            color: {COLOR_PRIMARY};
+            text-decoration: none;
+        }}
+        [data-testid="stMetric"] {{
+            background-color: {COLOR_NEUTRAL_100};
+            border: 1px solid {COLOR_NEUTRAL_300};
+            border-radius: 8px;
+            padding: 1rem 1.25rem;
+            box-shadow: 0 1px 4px rgba(27, 79, 138, 0.05);
+            transition: box-shadow 0.15s ease;
+        }}
+        [data-testid="stMetric"]:hover {{
+            box-shadow: 0 2px 12px rgba(27, 79, 138, 0.10);
+        }}
+        [data-testid="stAlert"] {{
+            border-radius: 8px;
+            border: 1px solid transparent;
+        }}
+        h1, h2, h3, h4 {{
+            color: {COLOR_NEUTRAL_900};
+            letter-spacing: -0.01em;
+        }}
+        .pillar-card {{
+            background: {COLOR_NEUTRAL_100};
+            border: 1px solid {COLOR_NEUTRAL_300};
+            border-radius: 10px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 12px rgba(27, 79, 138, 0.06);
+            height: 100%;
+        }}
+        .pillar-card h3 {{
+            color: {COLOR_PRIMARY};
+            margin-top: 0;
+            margin-bottom: 0.75rem;
+            font-size: 1.15rem;
+        }}
+        .pillar-card .pillar-icon {{
+            font-size: 1.75rem;
+            margin-bottom: 0.5rem;
+        }}
+        .risk-card {{
+            border-radius: 10px;
+            padding: 1.1rem 1rem;
+            color: white;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+        }}
+        .risk-card .risk-label {{
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            opacity: 0.92;
+            margin-bottom: 0.25rem;
+        }}
+        .risk-card .risk-count {{
+            font-size: 2rem;
+            font-weight: 700;
+            line-height: 1;
+        }}
+        .footer-band {{
+            margin-top: 3rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid {COLOR_NEUTRAL_300};
+            color: {COLOR_NEUTRAL_600};
+            font-size: 0.85rem;
+            line-height: 1.6;
+        }}
+        .footer-band a {{
+            color: {COLOR_PRIMARY};
+            text-decoration: none;
+        }}
+        .footer-band a:hover {{ text-decoration: underline; }}
+        .hero-eyebrow {{
+            display: inline-block;
+            background: {COLOR_NEUTRAL_200};
+            color: {COLOR_PRIMARY};
+            font-size: 0.75rem;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            padding: 0.35rem 0.75rem;
+            border-radius: 999px;
+            margin-bottom: 1rem;
+        }}
+        .data-disclosure {{
+            background: {COLOR_NEUTRAL_200};
+            border-left: 4px solid {COLOR_PRIMARY};
+            padding: 1rem 1.25rem;
+            border-radius: 6px;
+            color: {COLOR_NEUTRAL_900};
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }}
+        .top-issue {{
+            background: {COLOR_NEUTRAL_100};
+            border: 1px solid {COLOR_NEUTRAL_300};
+            border-left: 4px solid {COLOR_WARNING};
+            border-radius: 6px;
+            padding: 1rem 1.25rem;
+            margin-bottom: 0.75rem;
+        }}
+        .top-issue .issue-headline {{
+            font-weight: 600;
+            color: {COLOR_NEUTRAL_900};
+            margin-bottom: 0.35rem;
+        }}
+        .top-issue .issue-rec {{
+            color: {COLOR_NEUTRAL_600};
+            font-size: 0.95rem;
+            line-height: 1.55;
+        }}
+    </style>
+    """
+    st.markdown(css, unsafe_allow_html=True)
+
+
+def load_logo_svg(color: str = COLOR_PRIMARY) -> str:
+    """Return the logo SVG with ``currentColor`` resolved to ``color``."""
+    try:
+        svg = LOGO_PATH.read_text(encoding="utf-8")
+    except Exception:
+        return ""
+    # Drop the XML prologue (Streamlit's markdown chokes on it occasionally).
+    svg = svg.replace('<?xml version="1.0" encoding="UTF-8"?>', "").strip()
+    return f'<div style="color:{color};">{svg}</div>'
 
 
 # ---------------------------------------------------------------------------
@@ -85,57 +284,237 @@ def _cached_heatmap(seller_df: pd.DataFrame, service_level: float) -> pd.DataFra
 
 
 # ---------------------------------------------------------------------------
-# Page renderers
+# Plotly chart helpers
+# ---------------------------------------------------------------------------
+
+
+def _plotly_layout_defaults(fig: go.Figure, title: Optional[str] = None) -> go.Figure:
+    fig.update_layout(
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(
+            family="Inter, -apple-system, BlinkMacSystemFont, sans-serif",
+            color=COLOR_NEUTRAL_900,
+            size=13,
+        ),
+        title=dict(text=title, x=0, font=dict(size=16, color=COLOR_NEUTRAL_900)) if title else None,
+        margin=dict(l=10, r=10, t=40 if title else 10, b=40),
+        hoverlabel=dict(bgcolor="white", font_size=12, font_family="Inter, sans-serif"),
+    )
+    return fig
+
+
+def gauge_chart(score: float) -> go.Figure:
+    """Score gauge for the integrity overall score."""
+    if score >= 75:
+        bar_color = COLOR_SUCCESS
+    elif score >= 50:
+        bar_color = COLOR_WARNING
+    else:
+        bar_color = COLOR_DANGER
+    fig = go.Figure(
+        go.Indicator(
+            mode="gauge+number",
+            value=score,
+            number={"suffix": " / 100", "font": {"size": 32, "color": COLOR_NEUTRAL_900}},
+            gauge={
+                "axis": {"range": [0, 100], "tickwidth": 1, "tickcolor": COLOR_NEUTRAL_600},
+                "bar": {"color": bar_color, "thickness": 0.28},
+                "bgcolor": COLOR_NEUTRAL_200,
+                "borderwidth": 0,
+                "steps": [
+                    {"range": [0, 50], "color": "rgba(198, 40, 40, 0.10)"},
+                    {"range": [50, 75], "color": "rgba(245, 124, 0, 0.10)"},
+                    {"range": [75, 100], "color": "rgba(46, 125, 50, 0.10)"},
+                ],
+                "threshold": {
+                    "line": {"color": COLOR_NEUTRAL_900, "width": 2},
+                    "thickness": 0.75,
+                    "value": 75,
+                },
+            },
+        )
+    )
+    fig.update_layout(
+        height=250,
+        margin=dict(l=20, r=20, t=20, b=20),
+        paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="Inter, sans-serif", color=COLOR_NEUTRAL_900),
+    )
+    return fig
+
+
+def signal_bar_chart(score_df: pd.DataFrame) -> go.Figure:
+    fig = go.Figure()
+    fig.add_trace(
+        go.Bar(
+            y=score_df["signal"],
+            x=score_df["score"],
+            orientation="h",
+            marker=dict(color=[LEVEL_COLORS[r] for r in score_df["rating"]]),
+            hovertemplate="<b>%{y}</b><br>Score: %{x:.1f}/100<extra></extra>",
+            showlegend=False,
+        )
+    )
+    fig.add_vline(x=50, line=dict(color=COLOR_NEUTRAL_600, dash="dash", width=1),
+                  annotation_text="fair", annotation_position="top")
+    fig.add_vline(x=80, line=dict(color=COLOR_NEUTRAL_600, dash="dot", width=1),
+                  annotation_text="good", annotation_position="top")
+    fig.update_xaxes(range=[0, 100], title="Score (0–100)",
+                     gridcolor=COLOR_NEUTRAL_300, zerolinecolor=COLOR_NEUTRAL_300)
+    fig.update_yaxes(title=None, gridcolor=COLOR_NEUTRAL_300)
+    return _plotly_layout_defaults(fig, "Signal scores by rating")
+
+
+def hhi_bar_chart(summary: pd.DataFrame) -> go.Figure:
+    colors = [LEVEL_COLORS[l] for l in summary["concentration_level"]]
+    fig = go.Figure()
+    fig.add_trace(
+        go.Bar(
+            x=summary["category"],
+            y=summary["hhi"],
+            marker=dict(color=colors),
+            customdata=np.stack([summary["concentration_level"]], axis=-1),
+            hovertemplate=(
+                "<b>%{x}</b><br>HHI: %{y:,.0f}<br>"
+                "Level: %{customdata[0]}<extra></extra>"
+            ),
+        )
+    )
+    fig.add_hline(y=1500, line=dict(color=COLOR_NEUTRAL_600, dash="dash", width=1),
+                  annotation_text="DOJ moderate (1,500)", annotation_position="top right")
+    fig.add_hline(y=2500, line=dict(color=COLOR_NEUTRAL_900, dash="dash", width=1),
+                  annotation_text="DOJ high (2,500)", annotation_position="top right")
+    fig.update_xaxes(title=None, tickangle=-30, gridcolor=COLOR_NEUTRAL_300)
+    fig.update_yaxes(title="HHI", gridcolor=COLOR_NEUTRAL_300, zerolinecolor=COLOR_NEUTRAL_300)
+    return _plotly_layout_defaults(fig, "Catalog concentration by category (HHI)")
+
+
+def risk_distribution_chart(counts: pd.Series) -> go.Figure:
+    order = ["critical", "high", "medium", "low"]
+    counts = counts.reindex(order).fillna(0).astype(int)
+    fig = go.Figure()
+    fig.add_trace(
+        go.Bar(
+            x=counts.index,
+            y=counts.values,
+            marker=dict(color=[LEVEL_COLORS[lvl] for lvl in counts.index]),
+            text=counts.values,
+            textposition="outside",
+            hovertemplate="<b>%{x}</b><br>%{y} SKUs<extra></extra>",
+        )
+    )
+    fig.update_xaxes(title=None, gridcolor=COLOR_NEUTRAL_300)
+    fig.update_yaxes(title="Number of SKUs", gridcolor=COLOR_NEUTRAL_300)
+    return _plotly_layout_defaults(fig, "SKUs by stockout-risk level")
+
+
+def forecast_chart(history_dates, history_series, fc_dates, forecast, lower, upper, method: str) -> go.Figure:
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=fc_dates, y=upper, line=dict(width=0), showlegend=False, hoverinfo="skip",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=fc_dates, y=lower, line=dict(width=0), fill="tonexty",
+            fillcolor="rgba(45, 109, 181, 0.15)", name="95% PI", hoverinfo="skip",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=history_dates, y=history_series,
+            line=dict(color=COLOR_PRIMARY_DARK, width=2),
+            name="Actuals (last 90d)",
+            hovertemplate="%{x|%b %d}<br>%{y:.1f}<extra></extra>",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=fc_dates, y=forecast,
+            line=dict(color=COLOR_ACCENT, width=2.5, dash="dash"),
+            name=f"Forecast ({method})",
+            hovertemplate="%{x|%b %d}<br>%{y:.1f}<extra></extra>",
+        )
+    )
+    if len(history_dates):
+        fig.add_vline(x=history_dates[-1], line=dict(color=COLOR_NEUTRAL_600, dash="dot", width=1))
+    fig.update_xaxes(title="date", gridcolor=COLOR_NEUTRAL_300, zerolinecolor=COLOR_NEUTRAL_300)
+    fig.update_yaxes(title="units / day", gridcolor=COLOR_NEUTRAL_300, zerolinecolor=COLOR_NEUTRAL_300)
+    return _plotly_layout_defaults(fig, "Actuals + forecast + 95% prediction interval")
+
+
+# ---------------------------------------------------------------------------
+# Pages
 # ---------------------------------------------------------------------------
 
 
 def render_home() -> None:
-    st.title("Main Street Marketplace Toolkit")
-    st.subheader(
-        "Open, free marketplace intelligence for U.S. small businesses."
+    st.markdown(load_logo_svg(COLOR_PRIMARY), unsafe_allow_html=True)
+    st.markdown('<div class="hero-eyebrow">Open Source · MIT Licensed · Free Forever</div>',
+                unsafe_allow_html=True)
+    st.markdown(
+        "<h1 style='margin-bottom:0.25rem;'>Main Street Marketplace Toolkit</h1>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f"<p style='font-size:1.15rem;color:{COLOR_NEUTRAL_600};margin-top:0;'>"
+        "Open, free marketplace intelligence for U.S. small businesses.</p>",
+        unsafe_allow_html=True,
+    )
+    st.markdown("---")
+
+    cols = st.columns(3, gap="medium")
+    pillars = [
+        ("🏪", "Marketplace Integrity",
+         "Score listing health and concentration risk across ten quality "
+         "signals. Surface suppression risk before it costs you ranking."),
+        ("📦", "Supply Resilience",
+         "Diagnose stockout risk and compute safety stock and reorder "
+         "points for every SKU — with the platform suppression tail "
+         "factored in."),
+        ("📈", "Forecasting & Guardrails",
+         "Auto-select the right forecasting method per SKU and wrap the "
+         "result in five protective guardrails that say when not to trust "
+         "the forecast."),
+    ]
+    for col, (icon, title, body) in zip(cols, pillars):
+        with col:
+            st.markdown(
+                f'<div class="pillar-card">'
+                f'<div class="pillar-icon">{icon}</div>'
+                f"<h3>{title}</h3><p>{body}</p></div>",
+                unsafe_allow_html=True,
+            )
+
+    st.markdown("---")
+    st.markdown("#### Built for")
+    st.markdown(
+        "- **SBDC counselors** running small-business client clinics\n"
+        "- **State and regional commerce program staff** monitoring "
+        "marketplace exposure\n"
+        "- **Niche marketplace operators** (regional, vertical, or co-op)\n"
+        "- **SMB sellers** on Amazon, Walmart, Etsy, Shopify, eBay\n"
+        "- **Policy researchers** studying platform dynamics for U.S. "
+        "small businesses"
     )
 
-    st.write(
-        "An open-source Python toolkit for U.S. SBDC counselors, state "
-        "commerce program staff, niche marketplace operators, and small "
-        "marketplace sellers. The toolkit translates the kind of "
-        "analytics enterprise marketplaces use internally into "
-        "transparent, auditable modules anyone can run on their own "
-        "laptop. MIT licensed. Free forever."
+    st.markdown("---")
+    st.markdown(
+        '<div class="data-disclosure">'
+        "<strong>All data shown is synthetic</strong> — generated in-memory, "
+        "never read from disk. Every calculation works identically on real "
+        "seller-portal exports.</div>",
+        unsafe_allow_html=True,
     )
 
-    cols = st.columns(3)
-    with cols[0]:
-        st.markdown("### Marketplace Integrity")
-        st.write(
-            "Score a seller on ten fulfillment, post-purchase, and "
-            "content signals. Surface suppression risk and the top "
-            "issues to fix before the next reorder."
-        )
-    with cols[1]:
-        st.markdown("### Supply Resilience")
-        st.write(
-            "Classify each SKU's demand pattern, compute safety stock "
-            "and reorder points, and rank SKUs by current stockout "
-            "risk — including the platform suppression tail."
-        )
-    with cols[2]:
-        st.markdown("### Forecasting & Guardrails")
-        st.write(
-            "Auto-select a forecasting method per SKU and wrap the "
-            "result in five plain-language guardrails so a counselor "
-            "knows when to trust it."
-        )
-
-    st.info(
-        "**Get started:** pick a module from the sidebar on the left. "
-        "Every page is interactive and runs on synthetic data, so you "
-        "can explore without uploading anything."
-    )
-
-    st.caption(
-        "Built by Ayush Tripathi. MIT Licensed. Free forever."
-    )
+    st.markdown("")
+    cta_cols = st.columns(2)
+    with cta_cols[0]:
+        st.link_button("View source on GitHub →", GITHUB_URL, width="stretch")
+    with cta_cols[1]:
+        st.link_button("Read the article series →", ARTICLES_URL, width="stretch")
 
 
 def render_integrity() -> None:
@@ -143,9 +522,9 @@ def render_integrity() -> None:
     st.write(
         "Score a small seller against ten signals across fulfillment, "
         "post-purchase quality, and listing content. The scorecard's "
-        "weights and benchmarks are practitioner estimates from "
-        "publicly available platform guidance — not platform-disclosed "
-        "algorithmic weights."
+        "weights and benchmarks are practitioner estimates from publicly "
+        "available platform guidance — not platform-disclosed algorithmic "
+        "weights."
     )
 
     mode = st.radio(
@@ -162,11 +541,8 @@ def render_integrity() -> None:
             for name, info in scorecard["signal_scores"].items()
         }
     else:
-        st.caption(
-            "Enter your own metrics. Defaults are at each signal's "
-            "'good' benchmark."
-        )
-        metrics = {}
+        st.caption("Defaults are at each signal's 'good' benchmark.")
+        metrics: Dict[str, float] = {}
         cols = st.columns(2)
         for i, sig in enumerate(SIGNALS):
             col = cols[i % 2]
@@ -216,35 +592,34 @@ def render_integrity() -> None:
                     )
         scorecard = compute_scorecard(metrics)
 
-    # Headline
-    col_score, col_risk = st.columns(2)
-    with col_score:
-        st.metric("Overall score", f"{scorecard['overall_score']:.1f} / 100")
-    with col_risk:
-        st.metric(
-            "Suppression risk", scorecard["suppression_risk"].upper()
+    # Headline: gauge + metric tiles
+    head_cols = st.columns([2, 1])
+    with head_cols[0]:
+        st.plotly_chart(
+            gauge_chart(scorecard["overall_score"]),
+            config=PLOTLY_CONFIG,
+            width="stretch",
         )
+    with head_cols[1]:
+        st.metric("Overall score", f"{scorecard['overall_score']:.1f} / 100")
+        st.metric("Suppression risk", scorecard["suppression_risk"].upper())
 
     if scorecard["overall_score"] < 50:
         st.error(
             "**High suppression risk.** The seller's profile sits below "
-            "the threshold most marketplaces use for Buy-Box and "
-            "ranking eligibility. Address the top issues below before "
-            "the next reorder cycle."
+            "the threshold most marketplaces use for Buy-Box and ranking "
+            "eligibility. Address the top issues below before the next "
+            "reorder cycle."
         )
     elif scorecard["overall_score"] < 75:
         st.warning(
-            "**Medium suppression risk.** Listing-eligibility metrics "
-            "are functional but vulnerable. Knock out one or two of "
-            "the top issues to move into the safe zone."
+            "**Medium suppression risk.** Listing-eligibility metrics are "
+            "functional but vulnerable. Knock out one or two of the top "
+            "issues to move into the safe zone."
         )
 
-    # Signal breakdown
+    # Signal breakdown table + chart
     st.subheader("Signal breakdown")
-    st.write(
-        "Each row is one signal. Score is on a 0–100 scale interpolated "
-        "between the 'poor' and 'good' benchmarks for that signal."
-    )
     rows = []
     for name, info in scorecard["signal_scores"].items():
         rows.append(
@@ -257,77 +632,71 @@ def render_integrity() -> None:
             }
         )
     score_df = pd.DataFrame(rows).sort_values("score")
-    st.dataframe(score_df, width="stretch", hide_index=True)
-
-    # Bar chart
-    fig, ax = plt.subplots(figsize=(9, 4.5))
-    ax.barh(
-        score_df["signal"],
-        score_df["score"],
-        color=[LEVEL_COLORS[r] for r in score_df["rating"]],
+    st.dataframe(
+        score_df,
+        width="stretch",
+        hide_index=True,
+        column_config={
+            "score": st.column_config.ProgressColumn(
+                "score", min_value=0, max_value=100, format="%.1f",
+            ),
+            "weight": st.column_config.NumberColumn("weight", format="%.2f"),
+        },
     )
-    ax.axvline(50, color="#7f8c8d", linestyle="--", linewidth=0.8)
-    ax.axvline(80, color="#7f8c8d", linestyle=":", linewidth=0.8)
-    ax.set_xlim(0, 100)
-    ax.set_xlabel("Score (/100)")
-    ax.set_title("Signal scores", loc="left")
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
-    plt.tight_layout()
-    st.pyplot(fig)
+    st.plotly_chart(signal_bar_chart(score_df), config=PLOTLY_CONFIG, width="stretch")
 
     # Top issues
     if scorecard["top_issues"]:
         st.subheader("Top issues to fix")
-        for issue, rec in zip(
-            scorecard["top_issues"], scorecard["recommendations"]
-        ):
-            st.warning(f"**{issue['plain_english']}**\n\n{rec}")
+        for issue, rec in zip(scorecard["top_issues"], scorecard["recommendations"]):
+            st.markdown(
+                f'<div class="top-issue">'
+                f'<div class="issue-headline">{issue["plain_english"]}</div>'
+                f'<div class="issue-rec">→ {rec}</div></div>',
+                unsafe_allow_html=True,
+            )
     else:
-        st.success("No signals are flagged as 'poor' or 'fair'.")
+        st.success("No signals are flagged as 'fair' or 'poor'.")
 
     # Concentration analysis
     st.divider()
     st.subheader("Catalog concentration analysis")
     st.write(
-        "How exposed is the seller to a single-SKU outage? The "
+        "How exposed is this seller to a single-SKU outage? The "
         "Herfindahl-Hirschman Index (HHI) measures how concentrated "
         "category volume is across SKUs. Thresholds shown are the U.S. "
         "Department of Justice merger-review thresholds."
     )
-    n_skus_conc = st.slider(
-        "SKUs in synthetic catalog", 10, 100, 50, 5,
-        key="conc_n_skus",
-    )
-    seed_conc = st.number_input(
-        "Catalog seed", value=42, step=1, key="conc_seed"
-    )
+    cc_cols = st.columns(2)
+    with cc_cols[0]:
+        n_skus_conc = st.slider("SKUs in synthetic catalog", 10, 100, 50, 5,
+                                key="conc_n_skus")
+    with cc_cols[1]:
+        seed_conc = st.number_input("Catalog seed", value=42, step=1, key="conc_seed")
+
     with st.spinner("Generating synthetic catalog…"):
         catalog = _cached_seller_data(int(n_skus_conc), 365, int(seed_conc))
     audit = concentration_audit(catalog)
 
     st.dataframe(audit["summary_df"].round(2), width="stretch", hide_index=True)
     st.info(audit["audit_narrative"])
+    st.plotly_chart(hhi_bar_chart(audit["summary_df"]), config=PLOTLY_CONFIG, width="stretch")
 
-    fig2, ax2 = plt.subplots(figsize=(9, 4.5))
-    summary = audit["summary_df"]
-    ax2.bar(
-        summary["category"],
-        summary["hhi"],
-        color=[LEVEL_COLORS[l] for l in summary["concentration_level"]],
-    )
-    ax2.axhline(1500, color="#7f8c8d", linestyle="--", linewidth=0.9, label="DOJ moderate (1,500)")
-    ax2.axhline(2500, color="#34495e", linestyle="--", linewidth=0.9, label="DOJ high (2,500)")
-    ax2.set_ylabel("HHI")
-    ax2.set_title("HHI by category", loc="left")
-    ax2.tick_params(axis="x", rotation=30)
-    for label in ax2.get_xticklabels():
-        label.set_horizontalalignment("right")
-    ax2.spines["top"].set_visible(False)
-    ax2.spines["right"].set_visible(False)
-    ax2.legend(frameon=False, fontsize=9)
-    plt.tight_layout()
-    st.pyplot(fig2)
+    # What does this mean for me?
+    with st.expander("What does this mean for me?"):
+        st.markdown(
+            "- **Overall score below 75** is the cue to schedule a "
+            "performance review with the seller. The top-issues list is "
+            "the agenda.\n"
+            "- **HHI above 2,500** in any category means the seller's "
+            "volume in that category rests on too few SKUs. Ask whether "
+            "the dominant SKU has a backup listing, an alternate "
+            "supplier, or a second-source manufacturer.\n"
+            "- The signals here cover what marketplaces *publish* about "
+            "what they reward. They don't include any platform-private "
+            "signals; if your marketplace exposes additional metrics in "
+            "its seller portal, fold them into your own conversation."
+        )
 
 
 def render_resilience() -> None:
@@ -339,19 +708,15 @@ def render_resilience() -> None:
         "data; the same code works on a real seller-portal export."
     )
 
-    col1, col2, col3 = st.columns(3)
-    with col1:
+    cfg_cols = st.columns(3)
+    with cfg_cols[0]:
         n_skus = st.slider("Number of SKUs", 10, 100, 50, 5)
-    with col2:
+    with cfg_cols[1]:
         seed = st.number_input("Seed", value=42, step=1, key="res_seed")
-    with col3:
-        service_level = st.selectbox(
-            "Service level",
-            [0.90, 0.95, 0.97, 0.98, 0.99],
-            index=1,
-        )
+    with cfg_cols[2]:
+        service_level = st.selectbox("Service level", [0.90, 0.95, 0.97, 0.98, 0.99], index=1)
 
-    with st.spinner("Generating synthetic catalog and running pipeline…"):
+    with st.spinner("Generating catalog and running resilience pipeline…"):
         catalog = _cached_seller_data(int(n_skus), 365, int(seed))
         heatmap = _cached_heatmap(catalog, float(service_level))
 
@@ -359,11 +724,22 @@ def render_resilience() -> None:
         ["critical", "high", "medium", "low"]
     ).fillna(0).astype(int)
 
-    metric_cols = st.columns(4)
-    metric_cols[0].metric("Critical", int(counts.get("critical", 0)))
-    metric_cols[1].metric("High", int(counts.get("high", 0)))
-    metric_cols[2].metric("Medium", int(counts.get("medium", 0)))
-    metric_cols[3].metric("Low", int(counts.get("low", 0)))
+    # Color-coded risk metric cards
+    risk_cols = st.columns(4, gap="small")
+    cards = [
+        ("CRITICAL", int(counts.get("critical", 0)), LEVEL_COLORS["critical"]),
+        ("HIGH",     int(counts.get("high", 0)),     LEVEL_COLORS["high"]),
+        ("MEDIUM",   int(counts.get("medium", 0)),   LEVEL_COLORS["medium"]),
+        ("LOW",      int(counts.get("low", 0)),      LEVEL_COLORS["low"]),
+    ]
+    for col, (label, value, color) in zip(risk_cols, cards):
+        with col:
+            st.markdown(
+                f'<div class="risk-card" style="background:{color};">'
+                f'<div class="risk-label">{label}</div>'
+                f'<div class="risk-count">{value}</div></div>',
+                unsafe_allow_html=True,
+            )
 
     st.subheader("Stockout risk heatmap")
     st.write(
@@ -380,25 +756,13 @@ def render_resilience() -> None:
         heatmap[show_cols].round(2),
         width="stretch",
         hide_index=True,
+        column_config={
+            "risk_score": st.column_config.ProgressColumn(
+                "risk_score", min_value=0.0, max_value=1.0, format="%.2f",
+            ),
+        },
     )
-
-    # Risk-level distribution chart
-    fig, ax = plt.subplots(figsize=(9, 3.6))
-    order = ["critical", "high", "medium", "low"]
-    bar_counts = counts.reindex(order).fillna(0).astype(int)
-    ax.bar(
-        bar_counts.index,
-        bar_counts.values,
-        color=[LEVEL_COLORS[l] for l in bar_counts.index],
-    )
-    for i, v in enumerate(bar_counts.values):
-        ax.text(i, v + 0.3, str(int(v)), ha="center", fontsize=10)
-    ax.set_ylabel("Number of SKUs")
-    ax.set_title("SKUs by risk level", loc="left")
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
-    plt.tight_layout()
-    st.pyplot(fig)
+    st.plotly_chart(risk_distribution_chart(counts), config=PLOTLY_CONFIG, width="stretch")
 
     # Suppression cost calculator
     st.divider()
@@ -407,8 +771,7 @@ def render_resilience() -> None:
         "When a listing goes out of stock, the lost margin during the "
         "outage is only part of the cost — marketplace ranking algorithms "
         "tend to demote listings that go unavailable, and most listings "
-        "take some weeks to climb back. This calculator estimates that "
-        "tail."
+        "take some weeks to climb back."
     )
     st.caption(
         "The default 3.0× suppression multiplier and 21-day recovery "
@@ -418,9 +781,7 @@ def render_resilience() -> None:
 
     cc1, cc2, cc3, cc4 = st.columns(4)
     with cc1:
-        daily_profit = st.number_input(
-            "Daily profit when in stock ($)", value=120.0, step=10.0
-        )
+        daily_profit = st.number_input("Daily profit when in stock ($)", value=120.0, step=10.0)
     with cc2:
         stockout_days = st.slider("Stockout days", 1, 30, 7, 1)
     with cc3:
@@ -434,16 +795,44 @@ def render_resilience() -> None:
         suppression_multiplier=float(mult),
         recovery_days=int(recovery),
     )
-    out_cols = st.columns(3)
-    out_cols[0].metric("Direct cost", f"${cost['direct_cost']:,.0f}")
-    out_cols[1].metric("Suppression tail", f"${cost['suppression_cost']:,.0f}")
-    out_cols[2].metric("Total cost", f"${cost['total_cost']:,.0f}")
+
+    # Total cost as the headline; direct + suppression as supporting metrics
+    st.markdown(
+        f'<div style="background:{COLOR_DANGER};color:white;border-radius:10px;'
+        f'padding:1.5rem;text-align:center;margin-bottom:1rem;">'
+        f'<div style="font-size:0.8rem;text-transform:uppercase;letter-spacing:0.05em;'
+        f'opacity:0.92;">Total stockout cost</div>'
+        f'<div style="font-size:2.5rem;font-weight:700;line-height:1;">'
+        f'${cost["total_cost"]:,.0f}</div></div>',
+        unsafe_allow_html=True,
+    )
+    sub_cols = st.columns(2)
+    with sub_cols[0]:
+        st.metric("Direct cost (lost sales)", f"${cost['direct_cost']:,.0f}")
+    with sub_cols[1]:
+        st.metric("Suppression tail", f"${cost['suppression_cost']:,.0f}",
+                  delta=f"{(cost['suppression_cost']/max(cost['direct_cost'],1)*100):.0f}% of direct"
+                  if cost["direct_cost"] > 0 else None)
+
+    with st.expander("Why does suppression matter?"):
+        st.markdown(
+            "Marketplace ranking algorithms reward *consistent* availability. "
+            "When a listing goes out of stock, the algorithm sees:\n\n"
+            "1. **Outage window** — the seller earns $0/day. This is the "
+            "*direct cost* shown above.\n"
+            "2. **Restock + recovery window** — the listing is back in stock, "
+            "but its ranking is depressed. The seller still earns less than "
+            "their normal day-rate for several weeks. This is the "
+            "*suppression tail*.\n\n"
+            "For most SMB sellers, the suppression tail is **larger than the "
+            "direct cost** — and is the reason a one-week stockout can "
+            "wipe out a quarter of profit."
+        )
 
 
 def _force_method(sub: pd.DataFrame, pattern: str, horizon: int) -> Dict[str, Any]:
-    series = (
-        sub.sort_values("date")["units_sold"].astype(float).to_numpy()
-    )
+    """Run the auto-selected method for ``pattern`` on a single SKU."""
+    series = sub.sort_values("date")["units_sold"].astype(float).to_numpy()
     dates = pd.DatetimeIndex(sub.sort_values("date")["date"])
     method = auto_select_method(pattern, series_length=len(series))
     if method == "naive":
@@ -478,6 +867,25 @@ def _force_method(sub: pd.DataFrame, pattern: str, horizon: int) -> Dict[str, An
     }
 
 
+_METHOD_RATIONALE = {
+    "naive": "Last value, repeated. The simplest baseline.",
+    "seasonal_naive": "Same day next week. Strong on weekly cycles.",
+    "moving_average": "Trailing-window mean. Safest when there's "
+                       "little history or the SKU is brand-new.",
+    "ses": "Smoothed level only. Right when demand is steady and "
+            "neither trending nor seasonal.",
+    "holts": "Smoothed level plus trend. Use when there's a "
+              "persistent upward or downward drift.",
+    "holt_winters": "Level + trend + seasonal cycle. Right when "
+                     "demand swings predictably each week.",
+    "croston": "Models size and incidence separately. Right for "
+                "intermittent demand with many zero days.",
+    "prophet": "Bayesian additive model with holiday effects. Right "
+                "for SKUs with full-year history and clear holiday "
+                "spikes.",
+}
+
+
 def render_forecasting() -> None:
     st.title("Demand Forecasting & Guardrails")
     st.write(
@@ -487,12 +895,12 @@ def render_forecasting() -> None:
         "what an exponential smoother is to use it."
     )
 
-    col1, col2, col3 = st.columns(3)
-    with col1:
+    cfg_cols = st.columns(3)
+    with cfg_cols[0]:
         pattern = st.selectbox("Demand pattern", list(PATTERNS), index=0)
-    with col2:
+    with cfg_cols[1]:
         seed = st.number_input("SKU seed", value=42, step=1, key="fc_seed")
-    with col3:
+    with cfg_cols[2]:
         horizon = st.slider("Forecast horizon (days)", 7, 60, 28, 1)
 
     with st.spinner("Generating SKU and running forecast…"):
@@ -511,32 +919,43 @@ def render_forecasting() -> None:
             st.error(f"Forecast failed: {exc}")
             return
 
-    info_cols = st.columns(3)
-    info_cols[0].metric("Representative SKU", result["sku_id"])
-    info_cols[1].metric("Method used", result["method_used"])
-    info_cols[2].metric("Horizon", f"{horizon} days")
+    # Method selection card
+    method = result["method_used"]
+    rationale = _METHOD_RATIONALE.get(method, "")
+    st.markdown(
+        f'<div class="pillar-card" style="margin-bottom:1.5rem;">'
+        f'<div style="display:flex;flex-wrap:wrap;gap:1.5rem;align-items:center;">'
+        f'<div><div style="font-size:0.75rem;color:{COLOR_NEUTRAL_600};'
+        f'text-transform:uppercase;letter-spacing:0.05em;">SKU</div>'
+        f'<div style="font-weight:700;color:{COLOR_NEUTRAL_900};">{result["sku_id"]}</div></div>'
+        f'<div><div style="font-size:0.75rem;color:{COLOR_NEUTRAL_600};'
+        f'text-transform:uppercase;letter-spacing:0.05em;">Pattern</div>'
+        f'<div style="font-weight:700;color:{COLOR_NEUTRAL_900};">{result["pattern"]}</div></div>'
+        f'<div><div style="font-size:0.75rem;color:{COLOR_NEUTRAL_600};'
+        f'text-transform:uppercase;letter-spacing:0.05em;">Method</div>'
+        f'<div style="font-weight:700;color:{COLOR_PRIMARY};">{method}</div></div>'
+        f'<div><div style="font-size:0.75rem;color:{COLOR_NEUTRAL_600};'
+        f'text-transform:uppercase;letter-spacing:0.05em;">Horizon</div>'
+        f'<div style="font-weight:700;color:{COLOR_NEUTRAL_900};">{horizon} days</div></div>'
+        f'</div>'
+        f'<div style="margin-top:0.85rem;color:{COLOR_NEUTRAL_600};font-size:0.92rem;">'
+        f'<strong>Why this method?</strong> {rationale}</div></div>',
+        unsafe_allow_html=True,
+    )
 
-    # Chart
-    st.subheader("Actuals + forecast + 95% prediction interval")
+    # Forecast chart
     history_window = 90
     h_dates = result["dates"][-history_window:]
     h_series = result["series"][-history_window:]
-    f_dates = result["horizon_dates"]
-
-    fig, ax = plt.subplots(figsize=(10, 4.2))
-    ax.plot(h_dates, h_series, color="#34495e", linewidth=1.0, label="actuals (last 90d)")
-    ax.plot(f_dates, result["forecast"], color="#2980b9", linewidth=2.0,
-            label=f"forecast ({result['method_used']})")
-    ax.fill_between(f_dates, result["lower_95"], result["upper_95"],
-                    color="#3498db", alpha=0.18, label="95% PI")
-    ax.axvline(h_dates[-1], color="#bdc3c7", linestyle="--", linewidth=0.8)
-    ax.set_ylabel("units / day")
-    ax.set_xlabel("date")
-    ax.legend(frameon=False, loc="upper left", fontsize=9)
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
-    plt.tight_layout()
-    st.pyplot(fig)
+    st.plotly_chart(
+        forecast_chart(
+            h_dates, h_series, result["horizon_dates"],
+            result["forecast"], result["lower_95"], result["upper_95"],
+            method,
+        ),
+        config=PLOTLY_CONFIG,
+        width="stretch",
+    )
 
     # Guardrails
     st.subheader("Guardrails")
@@ -546,7 +965,7 @@ def render_forecasting() -> None:
         "review the recommendation."
     )
 
-    forecast_dict_for_guards = {
+    forecast_dict = {
         "sku_id": result["sku_id"],
         "pattern": result["pattern"],
         "method_used": result["method_used"],
@@ -555,23 +974,29 @@ def render_forecasting() -> None:
         "upper_95": result["upper_95"],
         "horizon_dates": result["horizon_dates"],
     }
-    proposed = float(result["series"][-30:].mean()) * 30  # ~30 days of stock
+    proposed = float(result["series"][-30:].mean()) * 30
     try:
-        report = run_guardrails(sub, forecast_dict_for_guards, proposed_order_qty=proposed)
+        report = run_guardrails(sub, forecast_dict, proposed_order_qty=proposed)
     except Exception as exc:  # pragma: no cover - defensive
         st.error(f"Guardrails failed: {exc}")
         return
 
     overall = report["overall_recommendation"]
-    if report["any_fired"]:
+    n_fired = sum(
+        1 for k, v in report["guardrails"].items()
+        if k != "degradation" and v.get("fired")
+    )
+    if n_fired == 0:
+        st.success(f"**{overall}**")
+    elif n_fired == 1:
         st.warning(f"**{overall}**")
     else:
-        st.success(f"**{overall}**")
+        st.error(f"**{overall}**")
 
     rows = []
     for name, g in report["guardrails"].items():
         if name == "degradation":
-            status = f"level {g.get('fallback_level')} ({g.get('method_name')})"
+            status = f"L{g.get('fallback_level')} ({g.get('method_name')})"
         else:
             status = "🚨 FIRED" if g.get("fired") else "✅ ok"
         rows.append(
@@ -582,6 +1007,71 @@ def render_forecasting() -> None:
             }
         )
     st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
+
+    with st.expander("What do I do when a guardrail fires?"):
+        st.markdown(
+            "| Guardrail | If fired | Recommended action |\n"
+            "|---|---|---|\n"
+            "| **drift** | Forecast has been biased the same way for 3+ weeks | "
+            "Refit the model; check whether price, packaging, or competition changed |\n"
+            "| **confidence** | PI band is wider than the forecast level | "
+            "Pad safety stock instead of ordering to the point forecast |\n"
+            "| **regime** | Recent actuals are outside the forecast band | "
+            "Hold off on auto-reorders until you have 1–2 weeks of new-normal data |\n"
+            "| **cap** | Proposed order is more than 3× recent run-rate | "
+            "Manual review of the reorder math — expected this big a jump? |\n"
+            "| **degradation** | Primary forecast unavailable | "
+            "Fall back to the trailing 30-day mean (level 2); revisit next week |"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Sidebar + footer
+# ---------------------------------------------------------------------------
+
+
+def render_sidebar() -> str:
+    with st.sidebar:
+        st.markdown(
+            f'<div class="sidebar-logo">{load_logo_svg(COLOR_PRIMARY)}</div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            '<div class="sidebar-title">Main Street Marketplace Toolkit</div>'
+            '<div class="sidebar-subtitle">Open marketplace intelligence for U.S. small businesses.</div>',
+            unsafe_allow_html=True,
+        )
+        page = st.radio(
+            "Module",
+            [PAGE_HOME, PAGE_INTEGRITY, PAGE_RESILIENCE, PAGE_FORECAST],
+            index=0,
+            label_visibility="collapsed",
+        )
+        st.divider()
+        st.markdown(
+            f'<div class="sidebar-footer">'
+            f"All data is synthetic. MIT Licensed.<br/><br/>"
+            f'<a href="{GITHUB_URL}" target="_blank">GitHub</a> · '
+            f'<a href="{ARTICLES_URL}" target="_blank">Articles</a> · '
+            f'<a href="{WEBSITE_URL}" target="_blank">mainstreetmarketplace.org</a>'
+            f"<br/><br/>Built by Ayush Tripathi, San Francisco."
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+    return page
+
+
+def render_footer() -> None:
+    st.markdown(
+        f'<div class="footer-band">'
+        f"<strong>Main Street Marketplace Toolkit</strong>  ·  MIT Licensed  ·  Free forever<br/>"
+        f"Built by Ayush Tripathi · Data analytics and marketplace strategy practitioner, San Francisco<br/>"
+        f'<a href="{GITHUB_URL}" target="_blank">GitHub</a>  ·  '
+        f'<a href="{ARTICLES_URL}" target="_blank">Articles</a>  ·  '
+        f'<a href="{WEBSITE_URL}" target="_blank">mainstreetmarketplace.org</a>'
+        f"</div>",
+        unsafe_allow_html=True,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -594,22 +1084,10 @@ def main() -> None:
         page_title="Main Street Marketplace Toolkit",
         page_icon=":bar_chart:",
         layout="wide",
+        initial_sidebar_state="expanded",
     )
-
-    with st.sidebar:
-        st.markdown("## Main Street Marketplace Toolkit")
-        st.caption("Open, free marketplace intelligence.")
-        page = st.radio(
-            "Module",
-            [PAGE_HOME, PAGE_INTEGRITY, PAGE_RESILIENCE, PAGE_FORECAST],
-            index=0,
-        )
-        st.divider()
-        st.caption(
-            "Built by Ayush Tripathi. MIT Licensed. Free forever.\n\n"
-            "All data shown in this app is synthetic — generated "
-            "in-memory, never read from disk."
-        )
+    inject_css()
+    page = render_sidebar()
 
     if page == PAGE_HOME:
         render_home()
@@ -619,6 +1097,8 @@ def main() -> None:
         render_resilience()
     elif page == PAGE_FORECAST:
         render_forecasting()
+
+    render_footer()
 
 
 if __name__ == "__main__":
