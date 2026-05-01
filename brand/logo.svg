@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 152 32" role="img" aria-label="Main Street Marketplace Toolkit">
+  <title>Main Street Marketplace Toolkit</title>
+  <!--
+    Logomark: four rising bars (a stylized "M" / step graph) suggesting
+    market growth and main-street storefront silhouettes. Wordmark "msmt"
+    in geometric sans, set with a system-font stack so no external font
+    is fetched. Colored via fill="currentColor" so CSS can invert the
+    logo on dark surfaces.
+  -->
+  <g fill="currentColor">
+    <rect x="2" y="20" width="4" height="10" rx="1"/>
+    <rect x="9" y="14" width="4" height="16" rx="1"/>
+    <rect x="16" y="8"  width="4" height="22" rx="1"/>
+    <rect x="23" y="2"  width="4" height="28" rx="1"/>
+  </g>
+  <text x="38" y="24"
+        font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif"
+        font-weight="700"
+        font-size="22"
+        letter-spacing="-0.025em"
+        fill="currentColor">msmt</text>
+</svg>
