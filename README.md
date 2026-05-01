@@ -90,6 +90,47 @@ The four pages mirror the modules:
 > Screenshot placeholder — running the app locally and taking
 > screenshots of each page is the recommended next step.
 
+## Deployment
+
+The repo is set up for two independent deployments — the interactive
+Streamlit app and the standalone landing page — both free.
+
+### Streamlit Community Cloud (the app)
+
+The app is configured for one-click deployment to
+[Streamlit Community Cloud](https://share.streamlit.io):
+
+1. Go to [share.streamlit.io](https://share.streamlit.io) and connect
+   your GitHub account.
+2. Select this repo (`main-street-marketplace-toolkit`), branch `main`,
+   main file `app/streamlit_app.py`.
+3. The included `requirements.txt` (which installs the `msmt` package
+   directly from this GitHub repo via `git+https://...`) and
+   `.streamlit/config.toml` (theme + headless server) are picked up
+   automatically.
+4. Streamlit builds and deploys; the app goes live at a
+   `*.streamlit.app` URL.
+5. To use a custom subdomain (e.g. `app.mainstreetmarketplace.org`),
+   add it under *Settings → Custom domain* in your Streamlit Cloud app
+   settings and point a CNAME record at the URL Streamlit gives you.
+
+### Static landing page (mainstreetmarketplace.org)
+
+The `website/` folder is a self-contained static site. No build step,
+no JavaScript framework, no Node toolchain.
+
+* **Vercel** — `npx vercel deploy website/`, or connect the GitHub
+  repo via [vercel.com/new](https://vercel.com/new) and set the root
+  directory to `website/`.
+* **Netlify** — drag the `website/` folder onto
+  [netlify.com/drop](https://app.netlify.com/drop), or connect the
+  repo and set the publish directory to `website/`.
+* **GitHub Pages** — set the Pages source to the `main` branch with
+  the `/website` folder.
+
+After the static site is live, point `mainstreetmarketplace.org`'s
+DNS A or CNAME record at the deployed host.
+
 ## Walkthrough notebooks
 
 For readers who want to see the toolkit run end-to-end in code, the
