@@ -252,6 +252,78 @@ def inject_css() -> None:
             font-size: 0.95rem;
             line-height: 1.55;
         }}
+        /* Section cards: style Streamlit's bordered containers per spec. */
+        div[data-testid="stVerticalBlockBorderWrapper"] {{
+            background-color: {COLOR_NEUTRAL_100} !important;
+            border: 1px solid {COLOR_NEUTRAL_300} !important;
+            border-radius: 10px !important;
+            padding: 24px !important;
+            margin-bottom: 20px !important;
+            box-shadow: 0 1px 4px rgba(27, 79, 138, 0.06) !important;
+        }}
+        /* Module-page intro card. */
+        .intro-card {{
+            background: #EEF4FB;
+            border-left: 4px solid {COLOR_PRIMARY};
+            padding: 16px;
+            border-radius: 6px;
+            color: {COLOR_NEUTRAL_900};
+            font-size: 0.95rem;
+            line-height: 1.55;
+            margin-bottom: 1.5rem;
+        }}
+        /* Signal-breakdown HTML table with color-tinted rating cells. */
+        .signal-table {{
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.93rem;
+            margin: 0.25rem 0 1rem;
+            color: {COLOR_NEUTRAL_900};
+        }}
+        .signal-table th,
+        .signal-table td {{
+            padding: 0.6rem 0.85rem;
+            text-align: left;
+            border-bottom: 1px solid {COLOR_NEUTRAL_300};
+        }}
+        .signal-table thead th {{
+            background: {COLOR_NEUTRAL_200};
+            color: {COLOR_NEUTRAL_600};
+            font-weight: 600;
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }}
+        .signal-table tbody tr:last-child td {{ border-bottom: none; }}
+        .signal-table td.rating-cell {{
+            font-weight: 600;
+            text-transform: capitalize;
+        }}
+        /* Pillar accent strip — colored top border on each Home pillar card. */
+        .pillar-card.pillar-integrity   {{ border-top: 4px solid {COLOR_PRIMARY}; }}
+        .pillar-card.pillar-resilience  {{ border-top: 4px solid {COLOR_SUCCESS}; }}
+        .pillar-card.pillar-forecasting {{ border-top: 4px solid {COLOR_ACCENT}; }}
+        /* Sidebar active-page indicator (uses :has() — degrades gracefully). */
+        section[data-testid="stSidebar"] [role="radiogroup"] label {{
+            position: relative;
+            padding-left: 14px !important;
+            transition: background-color 0.15s ease;
+        }}
+        section[data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) {{
+            background: rgba(27, 79, 138, 0.06);
+            border-radius: 4px;
+        }}
+        section[data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked)::before {{
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 4px;
+            height: 24px;
+            background-color: {COLOR_PRIMARY};
+            border-radius: 2px;
+        }}
     </style>
     """
     st.markdown(css, unsafe_allow_html=True)
@@ -467,22 +539,22 @@ def render_home() -> None:
 
     cols = st.columns(3, gap="medium")
     pillars = [
-        ("🏪", "Marketplace Integrity",
+        ("🏪", "Marketplace Integrity", "pillar-integrity",
          "Score listing health and concentration risk across ten quality "
          "signals. Surface suppression risk before it costs you ranking."),
-        ("📦", "Supply Resilience",
+        ("📦", "Supply Resilience", "pillar-resilience",
          "Diagnose stockout risk and compute safety stock and reorder "
          "points for every SKU — with the platform suppression tail "
          "factored in."),
-        ("📈", "Forecasting & Guardrails",
+        ("📈", "Forecasting & Guardrails", "pillar-forecasting",
          "Auto-select the right forecasting method per SKU and wrap the "
          "result in five protective guardrails that say when not to trust "
          "the forecast."),
     ]
-    for col, (icon, title, body) in zip(cols, pillars):
+    for col, (icon, title, accent_cls, body) in zip(cols, pillars):
         with col:
             st.markdown(
-                f'<div class="pillar-card">'
+                f'<div class="pillar-card {accent_cls}">'
                 f'<div class="pillar-icon">{icon}</div>'
                 f"<h3>{title}</h3><p>{body}</p></div>",
                 unsafe_allow_html=True,
@@ -517,6 +589,40 @@ def render_home() -> None:
         st.link_button("Read the article series →", ARTICLES_URL, width="stretch")
 
 
+_RATING_BG = {
+    "good": "#E8F5E9",
+    "fair": "#FFF8E1",
+    "poor": "#FFEBEE",
+}
+
+
+def _render_signal_table_html(score_df: pd.DataFrame) -> None:
+    """Render the signal-breakdown table as HTML with a tinted rating cell."""
+    rows = []
+    for _, row in score_df.iterrows():
+        bg = _RATING_BG.get(str(row["rating"]), "transparent")
+        rows.append(
+            "<tr>"
+            f"<td>{row['signal']}</td>"
+            f"<td>{row['value']:.3f}</td>"
+            f"<td>{row['score']:.1f}</td>"
+            f"<td class='rating-cell' style='background-color:{bg};'>"
+            f"{row['rating']}</td>"
+            f"<td>{row['weight']:.2f}</td>"
+            "</tr>"
+        )
+    table_html = (
+        "<table class='signal-table'>"
+        "<thead><tr>"
+        "<th>Signal</th><th>Value</th><th>Score</th>"
+        "<th>Rating</th><th>Weight</th>"
+        "</tr></thead>"
+        f"<tbody>{''.join(rows)}</tbody>"
+        "</table>"
+    )
+    st.markdown(table_html, unsafe_allow_html=True)
+
+
 def render_integrity() -> None:
     st.title("Marketplace Integrity")
     st.write(
@@ -525,6 +631,14 @@ def render_integrity() -> None:
         "weights and benchmarks are practitioner estimates from publicly "
         "available platform guidance — not platform-disclosed algorithmic "
         "weights."
+    )
+
+    st.markdown(
+        '<div class="intro-card">This page scores a marketplace seller '
+        "against 10 quality signals across fulfillment, post-purchase, "
+        "and content. It shows you exactly where ranking is at risk — "
+        "and what to fix first.</div>",
+        unsafe_allow_html=True,
     )
 
     mode = st.radio(
@@ -618,8 +732,7 @@ def render_integrity() -> None:
             "issues to move into the safe zone."
         )
 
-    # Signal breakdown table + chart
-    st.subheader("Signal breakdown")
+    # Signal breakdown table + chart (wrapped in a section card)
     rows = []
     for name, info in scorecard["signal_scores"].items():
         rows.append(
@@ -632,71 +745,68 @@ def render_integrity() -> None:
             }
         )
     score_df = pd.DataFrame(rows).sort_values("score")
-    st.dataframe(
-        score_df,
-        width="stretch",
-        hide_index=True,
-        column_config={
-            "score": st.column_config.ProgressColumn(
-                "score", min_value=0, max_value=100, format="%.1f",
-            ),
-            "weight": st.column_config.NumberColumn("weight", format="%.2f"),
-        },
-    )
-    st.plotly_chart(signal_bar_chart(score_df), config=PLOTLY_CONFIG, width="stretch")
 
-    # Top issues
-    if scorecard["top_issues"]:
-        st.subheader("Top issues to fix")
-        for issue, rec in zip(scorecard["top_issues"], scorecard["recommendations"]):
-            st.markdown(
-                f'<div class="top-issue">'
-                f'<div class="issue-headline">{issue["plain_english"]}</div>'
-                f'<div class="issue-rec">→ {rec}</div></div>',
-                unsafe_allow_html=True,
-            )
-    else:
-        st.success("No signals are flagged as 'fair' or 'poor'.")
-
-    # Concentration analysis
-    st.divider()
-    st.subheader("Catalog concentration analysis")
-    st.write(
-        "How exposed is this seller to a single-SKU outage? The "
-        "Herfindahl-Hirschman Index (HHI) measures how concentrated "
-        "category volume is across SKUs. Thresholds shown are the U.S. "
-        "Department of Justice merger-review thresholds."
-    )
-    cc_cols = st.columns(2)
-    with cc_cols[0]:
-        n_skus_conc = st.slider("SKUs in synthetic catalog", 10, 100, 50, 5,
-                                key="conc_n_skus")
-    with cc_cols[1]:
-        seed_conc = st.number_input("Catalog seed", value=42, step=1, key="conc_seed")
-
-    with st.spinner("Generating synthetic catalog…"):
-        catalog = _cached_seller_data(int(n_skus_conc), 365, int(seed_conc))
-    audit = concentration_audit(catalog)
-
-    st.dataframe(audit["summary_df"].round(2), width="stretch", hide_index=True)
-    st.info(audit["audit_narrative"])
-    st.plotly_chart(hhi_bar_chart(audit["summary_df"]), config=PLOTLY_CONFIG, width="stretch")
-
-    # What does this mean for me?
-    with st.expander("What does this mean for me?"):
-        st.markdown(
-            "- **Overall score below 75** is the cue to schedule a "
-            "performance review with the seller. The top-issues list is "
-            "the agenda.\n"
-            "- **HHI above 2,500** in any category means the seller's "
-            "volume in that category rests on too few SKUs. Ask whether "
-            "the dominant SKU has a backup listing, an alternate "
-            "supplier, or a second-source manufacturer.\n"
-            "- The signals here cover what marketplaces *publish* about "
-            "what they reward. They don't include any platform-private "
-            "signals; if your marketplace exposes additional metrics in "
-            "its seller portal, fold them into your own conversation."
+    with st.container(border=True):
+        st.subheader("Signal breakdown")
+        _render_signal_table_html(score_df)
+        st.plotly_chart(
+            signal_bar_chart(score_df),
+            config=PLOTLY_CONFIG,
+            width="stretch",
         )
+
+    # Top issues (wrapped)
+    with st.container(border=True):
+        st.subheader("Top issues to fix")
+        if scorecard["top_issues"]:
+            for issue, rec in zip(scorecard["top_issues"], scorecard["recommendations"]):
+                st.markdown(
+                    f'<div class="top-issue">'
+                    f'<div class="issue-headline">{issue["plain_english"]}</div>'
+                    f'<div class="issue-rec">→ {rec}</div></div>',
+                    unsafe_allow_html=True,
+                )
+        else:
+            st.success("No signals are flagged as 'fair' or 'poor'.")
+
+    # Concentration analysis (wrapped)
+    with st.container(border=True):
+        st.subheader("Catalog concentration analysis")
+        st.write(
+            "How exposed is this seller to a single-SKU outage? The "
+            "Herfindahl-Hirschman Index (HHI) measures how concentrated "
+            "category volume is across SKUs. Thresholds shown are the U.S. "
+            "Department of Justice merger-review thresholds."
+        )
+        cc_cols = st.columns(2)
+        with cc_cols[0]:
+            n_skus_conc = st.slider("SKUs in synthetic catalog", 10, 100, 50, 5,
+                                    key="conc_n_skus")
+        with cc_cols[1]:
+            seed_conc = st.number_input("Catalog seed", value=42, step=1, key="conc_seed")
+
+        with st.spinner("Generating synthetic catalog…"):
+            catalog = _cached_seller_data(int(n_skus_conc), 365, int(seed_conc))
+        audit = concentration_audit(catalog)
+
+        st.dataframe(audit["summary_df"].round(2), width="stretch", hide_index=True)
+        st.info(audit["audit_narrative"])
+        st.plotly_chart(hhi_bar_chart(audit["summary_df"]), config=PLOTLY_CONFIG, width="stretch")
+
+        with st.expander("What does this mean for me?"):
+            st.markdown(
+                "- **Overall score below 75** is the cue to schedule a "
+                "performance review with the seller. The top-issues list is "
+                "the agenda.\n"
+                "- **HHI above 2,500** in any category means the seller's "
+                "volume in that category rests on too few SKUs. Ask whether "
+                "the dominant SKU has a backup listing, an alternate "
+                "supplier, or a second-source manufacturer.\n"
+                "- The signals here cover what marketplaces *publish* about "
+                "what they reward. They don't include any platform-private "
+                "signals; if your marketplace exposes additional metrics in "
+                "its seller portal, fold them into your own conversation."
+            )
 
 
 def render_resilience() -> None:
@@ -706,6 +816,13 @@ def render_resilience() -> None:
         "safety stock and reorder point, and rank the catalog by current "
         "stockout exposure. The pipeline runs end-to-end on synthetic "
         "data; the same code works on a real seller-portal export."
+    )
+
+    st.markdown(
+        '<div class="intro-card">This page classifies each SKU\'s demand '
+        "pattern, computes the appropriate safety stock and reorder "
+        "point, and ranks your catalog by current stockout exposure.</div>",
+        unsafe_allow_html=True,
     )
 
     cfg_cols = st.columns(3)
@@ -741,93 +858,99 @@ def render_resilience() -> None:
                 unsafe_allow_html=True,
             )
 
-    st.subheader("Stockout risk heatmap")
-    st.write(
-        "One row per SKU, sorted by stockout-risk score (highest first). "
-        "The 'action' column is the recommendation to walk through with "
-        "the seller."
-    )
-    show_cols = [
-        "sku_id", "pattern", "method_used", "rop", "safety_stock",
-        "current_stock", "risk_score", "risk_level",
-        "days_until_stockout", "action",
-    ]
-    st.dataframe(
-        heatmap[show_cols].round(2),
-        width="stretch",
-        hide_index=True,
-        column_config={
-            "risk_score": st.column_config.ProgressColumn(
-                "risk_score", min_value=0.0, max_value=1.0, format="%.2f",
-            ),
-        },
-    )
-    st.plotly_chart(risk_distribution_chart(counts), config=PLOTLY_CONFIG, width="stretch")
-
-    # Suppression cost calculator
-    st.divider()
-    st.subheader("Stockout cost calculator (with platform suppression)")
-    st.write(
-        "When a listing goes out of stock, the lost margin during the "
-        "outage is only part of the cost — marketplace ranking algorithms "
-        "tend to demote listings that go unavailable, and most listings "
-        "take some weeks to climb back."
-    )
-    st.caption(
-        "The default 3.0× suppression multiplier and 21-day recovery "
-        "window are practitioner estimates from industry observation, "
-        "not figures disclosed by any marketplace platform."
-    )
-
-    cc1, cc2, cc3, cc4 = st.columns(4)
-    with cc1:
-        daily_profit = st.number_input("Daily profit when in stock ($)", value=120.0, step=10.0)
-    with cc2:
-        stockout_days = st.slider("Stockout days", 1, 30, 7, 1)
-    with cc3:
-        mult = st.slider("Suppression multiplier", 1.0, 5.0, 3.0, 0.1)
-    with cc4:
-        recovery = st.slider("Recovery days", 0, 60, 21, 1)
-
-    cost = suppression_adjusted_stockout_cost(
-        daily_profit=float(daily_profit),
-        stockout_days=int(stockout_days),
-        suppression_multiplier=float(mult),
-        recovery_days=int(recovery),
-    )
-
-    # Total cost as the headline; direct + suppression as supporting metrics
-    st.markdown(
-        f'<div style="background:{COLOR_DANGER};color:white;border-radius:10px;'
-        f'padding:1.5rem;text-align:center;margin-bottom:1rem;">'
-        f'<div style="font-size:0.8rem;text-transform:uppercase;letter-spacing:0.05em;'
-        f'opacity:0.92;">Total stockout cost</div>'
-        f'<div style="font-size:2.5rem;font-weight:700;line-height:1;">'
-        f'${cost["total_cost"]:,.0f}</div></div>',
-        unsafe_allow_html=True,
-    )
-    sub_cols = st.columns(2)
-    with sub_cols[0]:
-        st.metric("Direct cost (lost sales)", f"${cost['direct_cost']:,.0f}")
-    with sub_cols[1]:
-        st.metric("Suppression tail", f"${cost['suppression_cost']:,.0f}",
-                  delta=f"{(cost['suppression_cost']/max(cost['direct_cost'],1)*100):.0f}% of direct"
-                  if cost["direct_cost"] > 0 else None)
-
-    with st.expander("Why does suppression matter?"):
-        st.markdown(
-            "Marketplace ranking algorithms reward *consistent* availability. "
-            "When a listing goes out of stock, the algorithm sees:\n\n"
-            "1. **Outage window** — the seller earns $0/day. This is the "
-            "*direct cost* shown above.\n"
-            "2. **Restock + recovery window** — the listing is back in stock, "
-            "but its ranking is depressed. The seller still earns less than "
-            "their normal day-rate for several weeks. This is the "
-            "*suppression tail*.\n\n"
-            "For most SMB sellers, the suppression tail is **larger than the "
-            "direct cost** — and is the reason a one-week stockout can "
-            "wipe out a quarter of profit."
+    # Stockout risk heatmap (wrapped)
+    with st.container(border=True):
+        st.subheader("Stockout risk heatmap")
+        st.write(
+            "One row per SKU, sorted by stockout-risk score (highest first). "
+            "The 'action' column is the recommendation to walk through with "
+            "the seller."
         )
+        show_cols = [
+            "sku_id", "pattern", "method_used", "rop", "safety_stock",
+            "current_stock", "risk_score", "risk_level",
+            "days_until_stockout", "action",
+        ]
+        st.dataframe(
+            heatmap[show_cols].round(2),
+            width="stretch",
+            hide_index=True,
+            column_config={
+                "risk_score": st.column_config.ProgressColumn(
+                    "risk_score", min_value=0.0, max_value=1.0, format="%.2f",
+                ),
+            },
+        )
+        st.plotly_chart(
+            risk_distribution_chart(counts),
+            config=PLOTLY_CONFIG,
+            width="stretch",
+        )
+
+    # Suppression cost calculator (wrapped)
+    with st.container(border=True):
+        st.subheader("Stockout cost calculator (with platform suppression)")
+        st.write(
+            "When a listing goes out of stock, the lost margin during the "
+            "outage is only part of the cost — marketplace ranking algorithms "
+            "tend to demote listings that go unavailable, and most listings "
+            "take some weeks to climb back."
+        )
+        st.caption(
+            "The default 3.0× suppression multiplier and 21-day recovery "
+            "window are practitioner estimates from industry observation, "
+            "not figures disclosed by any marketplace platform."
+        )
+
+        cc1, cc2, cc3, cc4 = st.columns(4)
+        with cc1:
+            daily_profit = st.number_input("Daily profit when in stock ($)", value=120.0, step=10.0)
+        with cc2:
+            stockout_days = st.slider("Stockout days", 1, 30, 7, 1)
+        with cc3:
+            mult = st.slider("Suppression multiplier", 1.0, 5.0, 3.0, 0.1)
+        with cc4:
+            recovery = st.slider("Recovery days", 0, 60, 21, 1)
+
+        cost = suppression_adjusted_stockout_cost(
+            daily_profit=float(daily_profit),
+            stockout_days=int(stockout_days),
+            suppression_multiplier=float(mult),
+            recovery_days=int(recovery),
+        )
+
+        # Total cost as the headline; direct + suppression as supporting metrics
+        st.markdown(
+            f'<div style="background:{COLOR_DANGER};color:white;border-radius:10px;'
+            f'padding:1.5rem;text-align:center;margin-bottom:1rem;">'
+            f'<div style="font-size:0.8rem;text-transform:uppercase;letter-spacing:0.05em;'
+            f'opacity:0.92;">Total stockout cost</div>'
+            f'<div style="font-size:2.5rem;font-weight:700;line-height:1;">'
+            f'${cost["total_cost"]:,.0f}</div></div>',
+            unsafe_allow_html=True,
+        )
+        sub_cols = st.columns(2)
+        with sub_cols[0]:
+            st.metric("Direct cost (lost sales)", f"${cost['direct_cost']:,.0f}")
+        with sub_cols[1]:
+            st.metric("Suppression tail", f"${cost['suppression_cost']:,.0f}",
+                      delta=f"{(cost['suppression_cost']/max(cost['direct_cost'],1)*100):.0f}% of direct"
+                      if cost["direct_cost"] > 0 else None)
+
+        with st.expander("Why does suppression matter?"):
+            st.markdown(
+                "Marketplace ranking algorithms reward *consistent* availability. "
+                "When a listing goes out of stock, the algorithm sees:\n\n"
+                "1. **Outage window** — the seller earns $0/day. This is the "
+                "*direct cost* shown above.\n"
+                "2. **Restock + recovery window** — the listing is back in stock, "
+                "but its ranking is depressed. The seller still earns less than "
+                "their normal day-rate for several weeks. This is the "
+                "*suppression tail*.\n\n"
+                "For most SMB sellers, the suppression tail is **larger than the "
+                "direct cost** — and is the reason a one-week stockout can "
+                "wipe out a quarter of profit."
+            )
 
 
 def _force_method(sub: pd.DataFrame, pattern: str, horizon: int) -> Dict[str, Any]:
@@ -895,6 +1018,14 @@ def render_forecasting() -> None:
         "what an exponential smoother is to use it."
     )
 
+    st.markdown(
+        '<div class="intro-card">This page picks the right forecasting '
+        "method for your SKU automatically, then wraps the forecast in "
+        "five guardrails that tell you when not to trust the prediction."
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
     cfg_cols = st.columns(3)
     with cfg_cols[0]:
         pattern = st.selectbox("Demand pattern", list(PATTERNS), index=0)
@@ -919,52 +1050,46 @@ def render_forecasting() -> None:
             st.error(f"Forecast failed: {exc}")
             return
 
-    # Method selection card
+    # Method selection (wrapped in a section card)
     method = result["method_used"]
     rationale = _METHOD_RATIONALE.get(method, "")
-    st.markdown(
-        f'<div class="pillar-card" style="margin-bottom:1.5rem;">'
-        f'<div style="display:flex;flex-wrap:wrap;gap:1.5rem;align-items:center;">'
-        f'<div><div style="font-size:0.75rem;color:{COLOR_NEUTRAL_600};'
-        f'text-transform:uppercase;letter-spacing:0.05em;">SKU</div>'
-        f'<div style="font-weight:700;color:{COLOR_NEUTRAL_900};">{result["sku_id"]}</div></div>'
-        f'<div><div style="font-size:0.75rem;color:{COLOR_NEUTRAL_600};'
-        f'text-transform:uppercase;letter-spacing:0.05em;">Pattern</div>'
-        f'<div style="font-weight:700;color:{COLOR_NEUTRAL_900};">{result["pattern"]}</div></div>'
-        f'<div><div style="font-size:0.75rem;color:{COLOR_NEUTRAL_600};'
-        f'text-transform:uppercase;letter-spacing:0.05em;">Method</div>'
-        f'<div style="font-weight:700;color:{COLOR_PRIMARY};">{method}</div></div>'
-        f'<div><div style="font-size:0.75rem;color:{COLOR_NEUTRAL_600};'
-        f'text-transform:uppercase;letter-spacing:0.05em;">Horizon</div>'
-        f'<div style="font-weight:700;color:{COLOR_NEUTRAL_900};">{horizon} days</div></div>'
-        f'</div>'
-        f'<div style="margin-top:0.85rem;color:{COLOR_NEUTRAL_600};font-size:0.92rem;">'
-        f'<strong>Why this method?</strong> {rationale}</div></div>',
-        unsafe_allow_html=True,
-    )
+    with st.container(border=True):
+        st.markdown(
+            f'<div style="display:flex;flex-wrap:wrap;gap:1.5rem;align-items:center;">'
+            f'<div><div style="font-size:0.75rem;color:{COLOR_NEUTRAL_600};'
+            f'text-transform:uppercase;letter-spacing:0.05em;">SKU</div>'
+            f'<div style="font-weight:700;color:{COLOR_NEUTRAL_900};">{result["sku_id"]}</div></div>'
+            f'<div><div style="font-size:0.75rem;color:{COLOR_NEUTRAL_600};'
+            f'text-transform:uppercase;letter-spacing:0.05em;">Pattern</div>'
+            f'<div style="font-weight:700;color:{COLOR_NEUTRAL_900};">{result["pattern"]}</div></div>'
+            f'<div><div style="font-size:0.75rem;color:{COLOR_NEUTRAL_600};'
+            f'text-transform:uppercase;letter-spacing:0.05em;">Method</div>'
+            f'<div style="font-weight:700;color:{COLOR_PRIMARY};">{method}</div></div>'
+            f'<div><div style="font-size:0.75rem;color:{COLOR_NEUTRAL_600};'
+            f'text-transform:uppercase;letter-spacing:0.05em;">Horizon</div>'
+            f'<div style="font-weight:700;color:{COLOR_NEUTRAL_900};">{horizon} days</div></div>'
+            f'</div>'
+            f'<div style="margin-top:0.85rem;color:{COLOR_NEUTRAL_600};font-size:0.92rem;">'
+            f'<strong>Why this method?</strong> {rationale}</div>',
+            unsafe_allow_html=True,
+        )
 
-    # Forecast chart
+    # Forecast chart (wrapped)
     history_window = 90
     h_dates = result["dates"][-history_window:]
     h_series = result["series"][-history_window:]
-    st.plotly_chart(
-        forecast_chart(
-            h_dates, h_series, result["horizon_dates"],
-            result["forecast"], result["lower_95"], result["upper_95"],
-            method,
-        ),
-        config=PLOTLY_CONFIG,
-        width="stretch",
-    )
+    with st.container(border=True):
+        st.plotly_chart(
+            forecast_chart(
+                h_dates, h_series, result["horizon_dates"],
+                result["forecast"], result["lower_95"], result["upper_95"],
+                method,
+            ),
+            config=PLOTLY_CONFIG,
+            width="stretch",
+        )
 
-    # Guardrails
-    st.subheader("Guardrails")
-    st.write(
-        "Five sanity checks that wrap the raw forecast before it drives "
-        "a reorder. A 'fired' guardrail is the cue to slow down and "
-        "review the recommendation."
-    )
-
+    # Guardrails (wrapped)
     forecast_dict = {
         "sku_id": result["sku_id"],
         "pattern": result["pattern"],
@@ -981,48 +1106,56 @@ def render_forecasting() -> None:
         st.error(f"Guardrails failed: {exc}")
         return
 
-    overall = report["overall_recommendation"]
-    n_fired = sum(
-        1 for k, v in report["guardrails"].items()
-        if k != "degradation" and v.get("fired")
-    )
-    if n_fired == 0:
-        st.success(f"**{overall}**")
-    elif n_fired == 1:
-        st.warning(f"**{overall}**")
-    else:
-        st.error(f"**{overall}**")
+    with st.container(border=True):
+        st.subheader("Guardrails")
+        st.write(
+            "Five sanity checks that wrap the raw forecast before it drives "
+            "a reorder. A 'fired' guardrail is the cue to slow down and "
+            "review the recommendation."
+        )
 
-    rows = []
-    for name, g in report["guardrails"].items():
-        if name == "degradation":
-            status = f"L{g.get('fallback_level')} ({g.get('method_name')})"
+        overall = report["overall_recommendation"]
+        n_fired = sum(
+            1 for k, v in report["guardrails"].items()
+            if k != "degradation" and v.get("fired")
+        )
+        if n_fired == 0:
+            st.success(f"**{overall}**")
+        elif n_fired == 1:
+            st.warning(f"**{overall}**")
         else:
-            status = "🚨 FIRED" if g.get("fired") else "✅ ok"
-        rows.append(
-            {
-                "guardrail": name,
-                "status": status,
-                "finding": g.get("recommendation", ""),
-            }
-        )
-    st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
+            st.error(f"**{overall}**")
 
-    with st.expander("What do I do when a guardrail fires?"):
-        st.markdown(
-            "| Guardrail | If fired | Recommended action |\n"
-            "|---|---|---|\n"
-            "| **drift** | Forecast has been biased the same way for 3+ weeks | "
-            "Refit the model; check whether price, packaging, or competition changed |\n"
-            "| **confidence** | PI band is wider than the forecast level | "
-            "Pad safety stock instead of ordering to the point forecast |\n"
-            "| **regime** | Recent actuals are outside the forecast band | "
-            "Hold off on auto-reorders until you have 1–2 weeks of new-normal data |\n"
-            "| **cap** | Proposed order is more than 3× recent run-rate | "
-            "Manual review of the reorder math — expected this big a jump? |\n"
-            "| **degradation** | Primary forecast unavailable | "
-            "Fall back to the trailing 30-day mean (level 2); revisit next week |"
-        )
+        rows = []
+        for name, g in report["guardrails"].items():
+            if name == "degradation":
+                status = f"L{g.get('fallback_level')} ({g.get('method_name')})"
+            else:
+                status = "🚨 FIRED" if g.get("fired") else "✅ ok"
+            rows.append(
+                {
+                    "guardrail": name,
+                    "status": status,
+                    "finding": g.get("recommendation", ""),
+                }
+            )
+        st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
+
+        with st.expander("What do I do when a guardrail fires?"):
+            st.markdown(
+                "| Guardrail | If fired | Recommended action |\n"
+                "|---|---|---|\n"
+                "| **drift** | Forecast has been biased the same way for 3+ weeks | "
+                "Refit the model; check whether price, packaging, or competition changed |\n"
+                "| **confidence** | PI band is wider than the forecast level | "
+                "Pad safety stock instead of ordering to the point forecast |\n"
+                "| **regime** | Recent actuals are outside the forecast band | "
+                "Hold off on auto-reorders until you have 1–2 weeks of new-normal data |\n"
+                "| **cap** | Proposed order is more than 3× recent run-rate | "
+                "Manual review of the reorder math — expected this big a jump? |\n"
+                "| **degradation** | Primary forecast unavailable | "
+                "Fall back to the trailing 30-day mean (level 2); revisit next week |"
+            )
 
 
 # ---------------------------------------------------------------------------
