@@ -15,11 +15,11 @@ file paths (other than the brand assets it ships with) and does not
 call any external APIs.
 """
 
+from __future__ import annotations
+
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from __future__ import annotations
 
 import warnings
 from pathlib import Path
