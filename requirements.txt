@@ -5,4 +5,3 @@ plotly>=5.18.0
 prophet>=1.1.0
 statsforecast>=1.7.0
 scipy>=1.11.0
-msmt @ git+https://github.com/ayushtripathi955/main-street-marketplace-toolkit.git
