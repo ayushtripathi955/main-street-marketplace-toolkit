@@ -15,6 +15,10 @@ file paths (other than the brand assets it ships with) and does not
 call any external APIs.
 """
 
+# Note: Streamlit Community Cloud's built-in analytics dashboard tracks
+# unique app sessions and geographic distribution. View at:
+# share.streamlit.io -> main-street-marketplace -> Analytics tab
+
 from __future__ import annotations
 
 import sys
@@ -101,6 +105,64 @@ PAGE_FORECAST = "Demand Forecasting"
 PLOTLY_CONFIG = {"displayModeBar": False, "responsive": True}
 
 LOGO_PATH = Path(__file__).resolve().parent.parent / "brand" / "logo.svg"
+
+
+# Six baseline forecasting methods exposed on the auto_select page strip.
+# Prophet is intentionally not in the strip — it's a holiday-spike specialist
+# that only fires for SKUs with full-year history.
+_METHODS_STRIP = [
+    ("naive",          "Naive",           "Last value, repeated."),
+    ("moving_average", "Moving Average",  "Trailing-window mean. Safe default for short history."),
+    ("ses",            "SES",             "Smoothed level. Right when demand is steady."),
+    ("holts",          "Holt's",          "Level + trend. Catches persistent drift."),
+    ("holt_winters",   "Holt-Winters",    "Level + trend + 7-day cycle."),
+    ("croston",        "Croston",         "Models size and incidence separately for lumpy demand."),
+]
+
+
+def _icon_svg(name: str, size: int = 24) -> str:
+    """Inline SVG for a pillar icon. Single-color stroke; size in px (square).
+
+    Three civic-tech-style icons in the brand palette:
+      integrity   = shield + check (primary blue)
+      resilience  = stacked boxes (success green)
+      forecasting = bar chart with horizontal guard line (accent orange)
+    """
+    icons = {
+        "integrity": (
+            f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" '
+            f'width="{size}" height="{size}" fill="none" '
+            f'stroke="{COLOR_PRIMARY}" stroke-width="2" '
+            f'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+            f'<path d="M12 2 L20 5 V11 C20 16 16 20 12 22 C8 20 4 16 4 11 V5 Z"/>'
+            f'<path d="M9 12 L11 14 L15 10"/>'
+            f'</svg>'
+        ),
+        "resilience": (
+            f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" '
+            f'width="{size}" height="{size}" fill="none" '
+            f'stroke="{COLOR_SUCCESS}" stroke-width="2" '
+            f'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+            f'<rect x="3" y="14" width="18" height="7" rx="1"/>'
+            f'<rect x="6" y="8" width="12" height="6" rx="1"/>'
+            f'<rect x="9" y="2" width="6" height="6" rx="1"/>'
+            f'</svg>'
+        ),
+        "forecasting": (
+            f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" '
+            f'width="{size}" height="{size}" fill="none" '
+            f'stroke="{COLOR_ACCENT}" stroke-width="2" '
+            f'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+            f'<line x1="2" y1="20" x2="22" y2="20"/>'
+            f'<line x1="6" y1="20" x2="6" y2="15"/>'
+            f'<line x1="11" y1="20" x2="11" y2="11"/>'
+            f'<line x1="16" y1="20" x2="16" y2="13"/>'
+            f'<line x1="21" y1="20" x2="21" y2="9"/>'
+            f'<line x1="2" y1="6" x2="22" y2="6" stroke-dasharray="2 2"/>'
+            f'</svg>'
+        ),
+    }
+    return icons.get(name, "")
 
 
 # ---------------------------------------------------------------------------
@@ -328,6 +390,113 @@ def inject_css() -> None:
             background-color: {COLOR_PRIMARY};
             border-radius: 2px;
         }}
+        /* Sidebar logo: cap rendered width and tighten vertical spacing. */
+        section[data-testid="stSidebar"] .sidebar-logo {{
+            margin: 0 0 0.35rem 0;
+        }}
+        section[data-testid="stSidebar"] .sidebar-logo svg {{
+            max-width: 140px;
+            height: auto;
+            display: block;
+        }}
+        section[data-testid="stSidebar"] .sidebar-title {{
+            margin-top: 0.1rem;
+        }}
+        section[data-testid="stSidebar"] .sidebar-subtitle {{
+            margin-bottom: 0.65rem;
+        }}
+        section[data-testid="stSidebar"] .sidebar-about {{
+            margin-top: 0.85rem;
+            padding-top: 0.85rem;
+            border-top: 1px solid {COLOR_NEUTRAL_300};
+            color: {COLOR_NEUTRAL_600};
+            font-size: 0.78rem;
+            line-height: 1.55;
+        }}
+        /* Home page: full-width "Why this exists" hero card. */
+        .why-card {{
+            background: #EEF4FB;
+            border-left: 4px solid {COLOR_PRIMARY};
+            padding: 20px;
+            border-radius: 8px;
+            color: {COLOR_NEUTRAL_900};
+            font-size: 1.0rem;
+            line-height: 1.65;
+            margin: 0.5rem 0 1.5rem;
+            font-style: italic;
+        }}
+        .why-card strong {{ font-style: normal; color: {COLOR_PRIMARY}; }}
+        /* Pillar SVG icons replace the emoji block. */
+        .pillar-card .pillar-icon svg {{ display: block; }}
+        /* Integrity page: top-issue / score-gap quick card next to suppression metric. */
+        .quick-card {{
+            background: {COLOR_NEUTRAL_100};
+            border: 1px solid {COLOR_NEUTRAL_300};
+            border-left: 4px solid {COLOR_ACCENT};
+            border-radius: 8px;
+            padding: 0.85rem 1rem;
+            margin-top: 0.5rem;
+            box-shadow: 0 1px 4px rgba(27, 79, 138, 0.05);
+        }}
+        .quick-card .quick-label {{
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: {COLOR_NEUTRAL_600};
+            font-weight: 600;
+        }}
+        .quick-card .quick-value {{
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: {COLOR_NEUTRAL_900};
+            margin: 0.15rem 0;
+        }}
+        .quick-card .quick-sub {{
+            font-size: 0.82rem;
+            color: {COLOR_NEUTRAL_600};
+        }}
+        /* Forecasting page: horizontal "What we considered" methods strip. */
+        .methods-strip {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.45rem;
+            align-items: center;
+            margin: 0.5rem 0 1.5rem;
+        }}
+        .methods-strip .strip-label {{
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: {COLOR_NEUTRAL_600};
+            font-weight: 600;
+            margin-right: 0.35rem;
+        }}
+        .method-chip {{
+            background: {COLOR_NEUTRAL_200};
+            color: {COLOR_NEUTRAL_600};
+            border: 1px solid {COLOR_NEUTRAL_300};
+            padding: 0.3rem 0.7rem;
+            border-radius: 999px;
+            font-size: 0.82rem;
+            cursor: help;
+            transition: background 0.15s ease, color 0.15s ease;
+        }}
+        .method-chip:hover {{
+            background: {COLOR_NEUTRAL_300};
+            color: {COLOR_NEUTRAL_900};
+        }}
+        .method-chip-active {{
+            background: rgba(27, 79, 138, 0.10);
+            color: {COLOR_PRIMARY};
+            border-color: {COLOR_PRIMARY};
+            font-weight: 600;
+        }}
+        .method-chip-prophet {{
+            background: rgba(232, 93, 38, 0.10);
+            color: {COLOR_ACCENT};
+            border-color: {COLOR_ACCENT};
+            font-weight: 600;
+        }}
     </style>
     """
     st.markdown(css, unsafe_allow_html=True)
@@ -541,25 +710,39 @@ def render_home() -> None:
     )
     st.markdown("---")
 
+    # "Why this exists" hero card — full width, above the three pillars.
+    st.markdown(
+        '<div class="why-card">'
+        "This toolkit translates marketplace analytics methods that "
+        "Fortune-100 retail platforms run internally into open, "
+        "non-proprietary frameworks. The same questions an enterprise "
+        "data team answers for a billion-dollar catalog — "
+        "<strong>Where am I exposed? What should I reorder? Can I "
+        "trust this forecast?</strong> — answered for the SMB seller "
+        "using a few hundred SKUs and a laptop."
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
     cols = st.columns(3, gap="medium")
     pillars = [
-        ("🏪", "Marketplace Integrity", "pillar-integrity",
+        ("integrity", "Marketplace Integrity", "pillar-integrity",
          "Score listing health and concentration risk across ten quality "
          "signals. Surface suppression risk before it costs you ranking."),
-        ("📦", "Supply Resilience", "pillar-resilience",
+        ("resilience", "Supply Resilience", "pillar-resilience",
          "Diagnose stockout risk and compute safety stock and reorder "
          "points for every SKU — with the platform suppression tail "
          "factored in."),
-        ("📈", "Forecasting & Guardrails", "pillar-forecasting",
+        ("forecasting", "Forecasting & Guardrails", "pillar-forecasting",
          "Auto-select the right forecasting method per SKU and wrap the "
          "result in five protective guardrails that say when not to trust "
          "the forecast."),
     ]
-    for col, (icon, title, accent_cls, body) in zip(cols, pillars):
+    for col, (icon_name, title, accent_cls, body) in zip(cols, pillars):
         with col:
             st.markdown(
                 f'<div class="pillar-card {accent_cls}">'
-                f'<div class="pillar-icon">{icon}</div>'
+                f'<div class="pillar-icon">{_icon_svg(icon_name, 24)}</div>'
                 f"<h3>{title}</h3><p>{body}</p></div>",
                 unsafe_allow_html=True,
             )
@@ -721,6 +904,30 @@ def render_integrity() -> None:
     with head_cols[1]:
         st.metric("Overall score", f"{scorecard['overall_score']:.1f} / 100")
         st.metric("Suppression risk", scorecard["suppression_risk"].upper())
+        # Quick-glance summary of the single weakest signal.
+        if scorecard["top_issues"]:
+            top = scorecard["top_issues"][0]
+            score_gap = max(0.0, 80.0 - float(top["score"]))
+            top_name = str(top["name"]).replace("_", " ").title()
+            st.markdown(
+                '<div class="quick-card">'
+                '<div class="quick-label">Top issue</div>'
+                f'<div class="quick-value">{top_name}</div>'
+                f'<div class="quick-sub">Score gap to good: '
+                f'{score_gap:.1f} pts</div>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                '<div class="quick-card" style="border-left-color:'
+                f'{COLOR_SUCCESS};">'
+                '<div class="quick-label">Top issue</div>'
+                '<div class="quick-value">None — all signals at "good"</div>'
+                '<div class="quick-sub">Recheck on your normal cadence.</div>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
 
     if scorecard["overall_score"] < 50:
         st.error(
@@ -1078,6 +1285,39 @@ def render_forecasting() -> None:
             unsafe_allow_html=True,
         )
 
+    # "What we considered" — horizontal strip listing the six baseline
+    # methods with a checkmark on the auto-selected one. Prophet is
+    # surfaced separately as a holiday-spike specialist.
+    chips_html = ['<div class="strip-label">What we considered</div>']
+    for key, label, tip in _METHODS_STRIP:
+        cls = "method-chip"
+        if method == key:
+            cls += " method-chip-active"
+            label_text = f"✓ {label}"
+        else:
+            label_text = label
+        chips_html.append(
+            f'<div class="{cls}" title="{tip}">{label_text}</div>'
+        )
+    if method == "prophet":
+        chips_html.append(
+            '<div class="method-chip method-chip-prophet" '
+            'title="Bayesian additive model with holiday effects. '
+            'Selected for full-year holiday-spike SKUs.">'
+            '✓ Prophet</div>'
+        )
+    else:
+        chips_html.append(
+            '<div class="method-chip" '
+            'title="Bayesian additive model with holiday effects. '
+            'Selected for full-year holiday-spike SKUs.">'
+            '+ Prophet</div>'
+        )
+    st.markdown(
+        f'<div class="methods-strip">{"".join(chips_html)}</div>',
+        unsafe_allow_html=True,
+    )
+
     # Forecast chart (wrapped)
     history_window = 90
     h_dates = result["dates"][-history_window:]
@@ -1193,6 +1433,13 @@ def render_sidebar() -> str:
             f'<a href="{WEBSITE_URL}" target="_blank">mainstreetmarketplace.org</a>'
             f"<br/><br/>Built by Ayush Tripathi, San Francisco."
             f"</div>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            '<div class="sidebar-about">'
+            "v0.5.0 · Built April 2026<br/>"
+            "A non-commercial public-goods project."
+            '</div>',
             unsafe_allow_html=True,
         )
     return page
