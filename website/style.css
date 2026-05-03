@@ -185,12 +185,14 @@ ul, ol { padding: 0; margin: 0; list-style: none; }
     gap: 0.6rem;
     color: var(--color-primary);
     font-weight: 700;
+    line-height: 1;
 }
 
 .brand-logo {
-    height: 28px;
+    height: 32px;
     width: auto;
     color: var(--color-primary);
+    display: block;
 }
 
 .brand-name {
@@ -372,18 +374,22 @@ ul, ol { padding: 0; margin: 0; list-style: none; }
     border-radius: var(--radius);
     box-shadow: var(--shadow);
     padding: 2rem 1.75rem;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    transition: transform 200ms ease, box-shadow 200ms ease;
 }
 
 .pillar-card:hover {
-    transform: translateY(-3px);
+    transform: translateY(-4px);
     box-shadow: var(--shadow-lg);
 }
 
 .pillar-card .pillar-icon {
-    font-size: 1.85rem;
     line-height: 1;
-    margin-bottom: 0.75rem;
+    margin-bottom: 0.85rem;
+    display: block;
+}
+
+.pillar-card .pillar-icon svg {
+    display: block;
 }
 
 .pillar-card h3 {
@@ -465,10 +471,28 @@ ul, ol { padding: 0; margin: 0; list-style: none; }
     border-left: 4px solid var(--color-primary);
     border-radius: var(--radius);
     padding: 1.25rem 1.5rem;
-    transition: box-shadow 0.15s ease;
+    transition: transform 200ms ease, box-shadow 200ms ease;
 }
 
-.article-card:hover { box-shadow: var(--shadow); }
+.article-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow);
+}
+
+.article-badge {
+    display: inline-block;
+    background-color: var(--color-neutral-300);
+    color: var(--color-neutral-600);
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.32rem 0.7rem;
+    border-radius: 999px;
+    cursor: default;
+    white-space: nowrap;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    user-select: none;
+}
 
 .article-num {
     font-family: var(--font-family);
@@ -504,7 +528,8 @@ ul, ol { padding: 0; margin: 0; list-style: none; }
         grid-template-columns: auto 1fr;
         grid-template-rows: auto auto;
     }
-    .article-link { grid-column: 1 / -1; text-align: right; }
+    .article-link,
+    .article-badge { grid-column: 1 / -1; text-align: right; justify-self: end; }
 }
 
 /* --------------------------------------------------------------------------
@@ -613,6 +638,13 @@ ul, ol { padding: 0; margin: 0; list-style: none; }
     margin: 0;
 }
 
+.footer-updated {
+    color: rgba(255, 255, 255, 0.45);
+    font-size: 0.78rem;
+    margin: 0.6rem 0 0;
+    letter-spacing: 0.02em;
+}
+
 @media (min-width: 768px) {
     .footer-inner {
         grid-template-columns: 1fr auto;
@@ -623,4 +655,198 @@ ul, ol { padding: 0; margin: 0; list-style: none; }
         padding-top: 1.5rem;
         border-top: 1px solid rgba(255, 255, 255, 0.08);
     }
+}
+
+/* --------------------------------------------------------------------------
+   Stats strip — horizontal "by the numbers" between hero and pillars.
+   -------------------------------------------------------------------------- */
+
+.stats-strip {
+    background-color: var(--color-neutral-200);
+    border-top: 1px solid var(--color-neutral-300);
+    border-bottom: 1px solid var(--color-neutral-300);
+    padding: 2rem 0;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+    text-align: center;
+}
+
+.stat {
+    padding: 0.5rem 1rem;
+}
+
+.stat-num {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--color-primary);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+}
+
+.stat-label {
+    font-size: 0.78rem;
+    color: var(--color-neutral-600);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 600;
+    margin-top: 0.4rem;
+}
+
+@media (min-width: 720px) {
+    .stats-grid {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0;
+    }
+    .stat + .stat {
+        border-left: 1px solid var(--color-neutral-300);
+    }
+}
+
+@media (min-width: 768px) {
+    .stat-num { font-size: 2.4rem; }
+}
+
+/* --------------------------------------------------------------------------
+   Comparison block — "How this is different".
+   -------------------------------------------------------------------------- */
+
+.compare {
+    background-color: var(--color-neutral-100);
+}
+
+.compare-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+    margin-top: 2rem;
+}
+
+.compare-card {
+    border: 1px solid var(--color-neutral-300);
+    border-radius: var(--radius);
+    padding: 1.75rem;
+    background-color: var(--color-neutral-100);
+    box-shadow: var(--shadow);
+}
+
+.compare-card.compare-other {
+    border-top: 4px solid var(--color-danger);
+}
+
+.compare-card.compare-msmt {
+    border-top: 4px solid var(--color-success);
+}
+
+.compare-card h3 {
+    font-size: 1.05rem;
+    color: var(--color-neutral-900);
+    margin-top: 0;
+    margin-bottom: 0.85rem;
+}
+
+.compare-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+}
+
+.compare-list li {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    color: var(--color-neutral-900);
+    font-size: 0.98rem;
+    line-height: 1.45;
+}
+
+.compare-icon {
+    flex: 0 0 auto;
+    width: 1.1rem;
+    height: 1.1rem;
+    margin-top: 0.15rem;
+    font-weight: 700;
+    text-align: center;
+    line-height: 1;
+}
+
+.compare-icon-x { color: var(--color-danger); }
+.compare-icon-check { color: var(--color-success); }
+
+@media (min-width: 720px) {
+    .compare-grid { grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+}
+
+/* --------------------------------------------------------------------------
+   About-the-author card.
+   -------------------------------------------------------------------------- */
+
+.author {
+    background-color: var(--color-neutral-200);
+}
+
+.author-card {
+    background-color: var(--color-neutral-100);
+    border: 1px solid var(--color-neutral-300);
+    border-radius: var(--radius);
+    padding: 2rem;
+    margin-top: 2rem;
+    max-width: 720px;
+    box-shadow: var(--shadow);
+}
+
+.author-card h3 {
+    font-size: 1.05rem;
+    color: var(--color-primary);
+    margin-top: 0;
+    margin-bottom: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.author-card p {
+    color: var(--color-neutral-900);
+    font-size: 1.0rem;
+    line-height: 1.65;
+    margin-bottom: 1rem;
+}
+
+.author-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.25rem;
+    font-size: 0.95rem;
+}
+
+.author-links a {
+    color: var(--color-primary);
+    font-weight: 600;
+}
+
+.author-links a:hover { color: var(--color-primary-dark); }
+
+/* --------------------------------------------------------------------------
+   Soften the bright-blue MIT callout into the dark-navy footer.
+   -------------------------------------------------------------------------- */
+
+.callout {
+    position: relative;
+}
+
+.callout::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 24px;
+    background: linear-gradient(
+        to bottom,
+        rgba(15, 48, 96, 0) 0%,
+        var(--color-neutral-900) 100%
+    );
+    pointer-events: none;
 }
