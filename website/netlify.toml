@@ -1,0 +1,7 @@
+
+[[redirects]]
+  from = "/*"
+  to = "https://main-street-marketplace.streamlit.app"
+  status = 301
+  force = true
+  conditions = {Host = ["app.mainstreetmarketplace.org"]}
