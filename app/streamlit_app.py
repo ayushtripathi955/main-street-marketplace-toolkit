@@ -869,16 +869,15 @@ def render_home() -> None:
     cols = st.columns(3, gap="medium")
     pillars = [
         ("integrity", "Marketplace Integrity", "pillar-integrity",
-         "Score listing health and concentration risk across ten quality "
-         "signals. Surface suppression risk before it costs you ranking."),
+         "See how healthy your storefront looks to the marketplace, in "
+         "one score, before the marketplace starts hiding your listings."),
         ("resilience", "Supply Resilience", "pillar-resilience",
-         "Diagnose stockout risk and compute safety stock and reorder "
-         "points for every SKU — with the platform suppression tail "
-         "factored in."),
+         "For every product, see when you should reorder — including "
+         "the hidden cost of a stockout, not just the lost sales."),
         ("forecasting", "Forecasting & Guardrails", "pillar-forecasting",
-         "Auto-select the right forecasting method per SKU and wrap the "
-         "result in five protective guardrails that say when not to trust "
-         "the forecast."),
+         "Forecast how much you'll sell over the next few weeks, with "
+         "five automatic checks that tell you when not to trust the "
+         "prediction."),
     ]
     for col, (icon_name, title, accent_cls, body) in zip(cols, pillars):
         with col:
@@ -1093,18 +1092,20 @@ def _render_signal_table_html(score_df: pd.DataFrame) -> None:
 def render_integrity() -> None:
     st.title("Marketplace Integrity")
     st.write(
-        "Score a small seller against ten signals across fulfillment, "
-        "post-purchase quality, and listing content. The scorecard's "
-        "weights and benchmarks are practitioner estimates from publicly "
-        "available platform guidance — not platform-disclosed algorithmic "
-        "weights."
+        "Score your storefront against ten things marketplaces watch — "
+        "how reliably you ship, how buyers rate you, and how complete "
+        "your listings are. The thresholds used here are practitioner "
+        "estimates drawn from publicly available platform guidance, "
+        "not platform-disclosed figures."
     )
 
     st.markdown(
-        '<div class="intro-card">This page scores a marketplace seller '
-        "against 10 quality signals across fulfillment, post-purchase, "
-        "and content. It shows you exactly where ranking is at risk — "
-        "and what to fix first.</div>",
+        '<div class="intro-card">'
+        "<strong>What this tells you:</strong> how healthy your "
+        "storefront looks to the marketplace. "
+        "<strong>What to do:</strong> fix the top one or two issues "
+        "below before your next reorder."
+        "</div>",
         unsafe_allow_html=True,
     )
 
@@ -1197,9 +1198,17 @@ def render_integrity() -> None:
             config=PLOTLY_CONFIG,
             width="stretch",
         )
+        st.caption(
+            "How to read this: 75+ is healthy, 50–75 is on watch, "
+            "below 50 needs work this week."
+        )
     with head_cols[1]:
         st.metric("Overall score", f"{scorecard['overall_score']:.1f} / 100")
-        st.metric("Suppression risk", scorecard["suppression_risk"].upper())
+        st.metric(
+            "Suppression risk",
+            scorecard["suppression_risk"].upper(),
+            help="How likely the marketplace is to bury your listings.",
+        )
         # Quick-glance summary of the single weakest signal.
         if scorecard["top_issues"]:
             top = scorecard["top_issues"][0]
@@ -1261,6 +1270,11 @@ def render_integrity() -> None:
             config=PLOTLY_CONFIG,
             width="stretch",
         )
+        st.caption(
+            "How to read this: green bars are at or above marketplace "
+            "expectations, yellow are borderline, red are below. "
+            "Longer is better."
+        )
 
     # Top issues (wrapped)
     with st.container(border=True):
@@ -1280,9 +1294,10 @@ def render_integrity() -> None:
     with st.container(border=True):
         st.subheader("Catalog concentration analysis")
         st.write(
-            "How exposed is this seller to a single-SKU outage? The "
-            "Herfindahl-Hirschman Index (HHI) measures how concentrated "
-            "category volume is across SKUs. Thresholds shown are the U.S. "
+            "How exposed is this seller to a single-SKU outage? **HHI** "
+            "(a standard measure of how concentrated your sales are in "
+            "just a few products) tells you whether one outage can take "
+            "a whole category offline. Thresholds shown are the U.S. "
             "Department of Justice merger-review thresholds."
         )
 
@@ -1315,6 +1330,11 @@ def render_integrity() -> None:
         st.dataframe(audit["summary_df"].round(2), width="stretch", hide_index=True)
         st.info(audit["audit_narrative"])
         st.plotly_chart(hhi_bar_chart(audit["summary_df"]), config=PLOTLY_CONFIG, width="stretch")
+        st.caption(
+            "How to read this: bars above the upper dashed line "
+            "(2,500) mean too much of that category sits in too few "
+            "products — a single outage takes the category offline."
+        )
 
         with st.expander("What does this mean for me?"):
             st.markdown(
@@ -1335,16 +1355,20 @@ def render_integrity() -> None:
 def render_resilience() -> None:
     st.title("Supply Resilience")
     st.write(
-        "Classify each SKU's demand pattern, compute the appropriate "
-        "safety stock and reorder point, and rank the catalog by current "
-        "stockout exposure. The pipeline runs end-to-end on synthetic "
-        "data; the same code works on a real seller-portal export."
+        "For every product you sell, work out the stock level where "
+        "you should reorder (the **reorder point** — the on-hand "
+        "level that triggers your next purchase order) and rank "
+        "everything from most-likely to run out to safest. Runs on "
+        "the built-in sample data, or your own seller-portal export."
     )
 
     st.markdown(
-        '<div class="intro-card">This page classifies each SKU\'s demand '
-        "pattern, computes the appropriate safety stock and reorder "
-        "point, and ranks your catalog by current stockout exposure.</div>",
+        '<div class="intro-card">'
+        "<strong>What this tells you:</strong> which of your products "
+        "are most likely to run out of stock soon. "
+        "<strong>What to do:</strong> reorder the products in the red "
+        "and orange rows first."
+        "</div>",
         unsafe_allow_html=True,
     )
 
@@ -1361,6 +1385,8 @@ def render_resilience() -> None:
                 [0.90, 0.95, 0.97, 0.98, 0.99],
                 index=1,
                 key="res_sl_up",
+                help=("How often you want to have stock available — "
+                      "0.95 means 95% of the time."),
             )
         catalog = uploaded_df
     else:
@@ -1378,7 +1404,9 @@ def render_resilience() -> None:
             seed = st.number_input("Seed", value=42, step=1, key="res_seed")
         with cfg_cols[2]:
             service_level = st.selectbox(
-                "Service level", [0.90, 0.95, 0.97, 0.98, 0.99], index=1
+                "Service level", [0.90, 0.95, 0.97, 0.98, 0.99], index=1,
+                help=("How often you want to have stock available — "
+                      "0.95 means 95% of the time."),
             )
         with st.spinner("Generating catalog…"):
             catalog = _cached_seller_data(int(n_skus), 365, int(seed))
@@ -1417,9 +1445,9 @@ def render_resilience() -> None:
     with st.container(border=True):
         st.subheader("Stockout risk heatmap")
         st.write(
-            "One row per SKU, sorted by stockout-risk score (highest first). "
-            "The 'action' column is the recommendation to walk through with "
-            "the seller."
+            "One row per product, sorted by **stockout-risk score** "
+            "(how likely this product is to run out soon, 0 to 1, "
+            "highest first). The 'action' column tells you what to do."
         )
         show_cols = [
             "sku_id", "pattern", "method_used", "rop", "safety_stock",
@@ -1440,6 +1468,10 @@ def render_resilience() -> None:
             risk_distribution_chart(counts),
             config=PLOTLY_CONFIG,
             width="stretch",
+        )
+        st.caption(
+            "How to read this: the red and orange bars are the "
+            "products to reorder first."
         )
 
     # Suppression cost calculator (wrapped)
@@ -1483,6 +1515,11 @@ def render_resilience() -> None:
             f'<div style="font-size:2.5rem;font-weight:700;line-height:1;">'
             f'${cost["total_cost"]:,.0f}</div></div>',
             unsafe_allow_html=True,
+        )
+        st.caption(
+            "How to read this: the big red number is what a stockout "
+            "costs in total, including the weeks of slower sales that "
+            "tend to follow when your listing comes back in stock."
         )
         sub_cols = st.columns(2)
         with sub_cols[0]:
@@ -1567,16 +1604,19 @@ _METHOD_RATIONALE = {
 def render_forecasting() -> None:
     st.title("Demand Forecasting & Guardrails")
     st.write(
-        "Pick a demand pattern, generate a representative SKU, and run "
-        "the auto-selected forecasting method. The toolkit picks the "
-        "method based on the demand archetype — you don't have to know "
-        "what an exponential smoother is to use it."
+        "Pick a product (or a sample one) and the toolkit chooses the "
+        "right forecasting method for it automatically. You don't need "
+        "a data-science background — pick a SKU and read the chart."
     )
 
     st.markdown(
-        '<div class="intro-card">This page picks the right forecasting '
-        "method for your SKU automatically, then wraps the forecast in "
-        "five guardrails that tell you when not to trust the prediction."
+        '<div class="intro-card">'
+        "<strong>What this tells you:</strong> how much you're likely "
+        "to sell over the next few weeks, and how confident the math "
+        "is. <strong>What to do:</strong> if the guardrails (automatic "
+        "checks that tell you when not to trust the forecast) are "
+        "green, you can plan to the forecast; if any are red, slow "
+        "down and review."
         "</div>",
         unsafe_allow_html=True,
     )
@@ -1590,8 +1630,11 @@ def render_forecasting() -> None:
         with sel_cols[0]:
             sku_choice = st.selectbox("Pick a SKU", all_skus, key="fc_sku_up")
         with sel_cols[1]:
-            horizon = st.slider("Forecast horizon (days)", 7, 60, 28, 1,
-                                key="fc_horizon_up")
+            horizon = st.slider(
+                "Forecast horizon (days)", 7, 60, 28, 1,
+                key="fc_horizon_up",
+                help="How many days ahead we're predicting.",
+            )
         sub = uploaded_df[uploaded_df["sku_id"] == sku_choice]
         with st.spinner("Running forecast on your data…"):
             try:
@@ -1619,7 +1662,10 @@ def render_forecasting() -> None:
         with cfg_cols[1]:
             seed = st.number_input("SKU seed", value=42, step=1, key="fc_seed")
         with cfg_cols[2]:
-            horizon = st.slider("Forecast horizon (days)", 7, 60, 28, 1)
+            horizon = st.slider(
+                "Forecast horizon (days)", 7, 60, 28, 1,
+                help="How many days ahead we're predicting.",
+            )
 
         with st.spinner("Generating SKU and running forecast…"):
             try:
@@ -1708,6 +1754,12 @@ def render_forecasting() -> None:
             config=PLOTLY_CONFIG,
             width="stretch",
         )
+        st.caption(
+            "How to read this: the solid line is your past sales, the "
+            "dashed line is what we expect, and the shaded band is the "
+            "**prediction interval** — the range the real number is "
+            "likely to fall in."
+        )
 
     # Guardrails (wrapped)
     forecast_dict = {
@@ -1746,12 +1798,22 @@ def render_forecasting() -> None:
         else:
             st.error(f"**{overall}**")
 
+        # Plain-English labels for the four backup-forecast levels.
+        _DEGRADATION_LABELS = {
+            1: "Backup forecast: not needed",
+            2: "Backup forecast: use the 30-day average",
+            3: "Backup forecast: use the 7-day average",
+            4: "Backup forecast: use yesterday's number",
+        }
         rows = []
         for name, g in report["guardrails"].items():
             if name == "degradation":
-                status = f"L{g.get('fallback_level')} ({g.get('method_name')})"
+                level = int(g.get("fallback_level") or 1)
+                status = _DEGRADATION_LABELS.get(
+                    level, f"Backup forecast: level {level}"
+                )
             else:
-                status = "🚨 FIRED" if g.get("fired") else "✅ ok"
+                status = "🚨 Needs review" if g.get("fired") else "✅ Looks fine"
             rows.append(
                 {
                     "guardrail": name,
