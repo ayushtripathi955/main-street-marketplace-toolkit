@@ -102,8 +102,24 @@ LEVEL_COLORS = {
 }
 
 GITHUB_URL = "https://github.com/ayushtripathi955/main-street-marketplace-toolkit"
-ARTICLES_URL = "#"
 WEBSITE_URL = "https://mainstreetmarketplace.org"
+
+# Live Medium URLs for the five-part practitioner series. ARTICLES_URL
+# points at article 1 as the series entry; the per-article links are
+# used by the Home page list and the website article cards.
+MEDIUM_ARTICLES = [
+    ("A Practitioner's Guide to Quality-Aware Marketplace Ranking",
+     "https://medium.com/@ayush.tripathi955/article-1-a-practitioners-guide-to-quality-aware-marketplace-ranking-cc10032bba84"),
+    ("Stop Running Out of Stock",
+     "https://medium.com/@ayush.tripathi955/article-2-stop-running-out-of-stock-e48d79baca83"),
+    ("Short-Horizon Demand Forecasting for SMBs",
+     "https://medium.com/@ayush.tripathi955/article-3-short-horizon-demand-forecasting-for-smbs-05fd069d8660"),
+    ("Forecasts Fail Quietly",
+     "https://medium.com/@ayush.tripathi955/article-4-forecasts-fail-quietly-359cef729bdc"),
+    ("Marketplace Concentration Risk",
+     "https://medium.com/@ayush.tripathi955/article-5-marketplace-concentration-risk-1d7af1908550"),
+]
+ARTICLES_URL = MEDIUM_ARTICLES[0][1]
 
 PAGE_HOME = "Home"
 PAGE_INTEGRITY = "Marketplace Integrity"

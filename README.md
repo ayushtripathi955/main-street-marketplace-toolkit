@@ -11,11 +11,11 @@ marketplace operator, or an SMB seller can run on their own laptop.
 It is a companion to the **Main Street Marketplace** article series, a
 five-part, plain-language walk-through of the same ideas:
 
-- Part 1 — *(coming soon)*
-- Part 2 — *(coming soon)*
-- Part 3 — *(coming soon)*
-- Part 4 — *(coming soon)*
-- Part 5 — *(coming soon)*
+- Part 1 — [A Practitioner's Guide to Quality-Aware Marketplace Ranking](https://medium.com/@ayush.tripathi955/article-1-a-practitioners-guide-to-quality-aware-marketplace-ranking-cc10032bba84)
+- Part 2 — [Stop Running Out of Stock](https://medium.com/@ayush.tripathi955/article-2-stop-running-out-of-stock-e48d79baca83)
+- Part 3 — [Short-Horizon Demand Forecasting for SMBs](https://medium.com/@ayush.tripathi955/article-3-short-horizon-demand-forecasting-for-smbs-05fd069d8660)
+- Part 4 — [Forecasts Fail Quietly](https://medium.com/@ayush.tripathi955/article-4-forecasts-fail-quietly-359cef729bdc)
+- Part 5 — [Marketplace Concentration Risk](https://medium.com/@ayush.tripathi955/article-5-marketplace-concentration-risk-1d7af1908550)
 
 There is no commercial version of this toolkit and no paid tier. It is MIT
 licensed, free forever, and intentionally built from public methods and
