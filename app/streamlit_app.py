@@ -36,6 +36,14 @@ import streamlit as st
 
 warnings.filterwarnings("ignore")
 
+# data_uploads.py lives next to this file. Add app/ to sys.path so the
+# import works whether the app is launched from the repo root (the
+# documented entry point) or from elsewhere.
+_THIS_DIR = str(Path(__file__).resolve().parent)
+if _THIS_DIR not in sys.path:
+    sys.path.insert(0, _THIS_DIR)
+import data_uploads as du  # noqa: E402
+
 from msmt.data import PATTERNS, generate_seller_data
 from msmt.forecasting import (
     auto_select_method,
@@ -105,6 +113,74 @@ PAGE_FORECAST = "Demand Forecasting"
 PLOTLY_CONFIG = {"displayModeBar": False, "responsive": True}
 
 LOGO_PATH = Path(__file__).resolve().parent.parent / "brand" / "logo.svg"
+
+
+# ---------------------------------------------------------------------------
+# Session-state helpers — wire one Home-page upload to every module page.
+# ---------------------------------------------------------------------------
+
+
+def _init_session_state() -> None:
+    """Make sure the session-state keys we read exist, with safe defaults."""
+    if "data_mode" not in st.session_state:
+        st.session_state["data_mode"] = "demo"
+    if "seller_data" not in st.session_state:
+        st.session_state["seller_data"] = {
+            "integrity": None,   # 1-row DataFrame (validated)
+            "inventory": None,   # long-format DataFrame (validated)
+        }
+    if "upload_errors" not in st.session_state:
+        st.session_state["upload_errors"] = {
+            "integrity": [],
+            "inventory": [],
+        }
+
+
+def get_active_data(module: str):
+    """Resolve the active data source for ``module``.
+
+    Returns a tuple ``(value, source)`` where ``source`` is one of:
+
+    * ``"uploaded"`` — the module has a validated upload to run on.
+    * ``"demo"``     — the global mode is ``"demo"`` or the user opted
+      into uploads but didn't provide this module's file. In either
+      case the module's caller falls back to its existing synthetic
+      pathway.
+
+    ``value`` is the uploaded DataFrame when ``source == "uploaded"``,
+    otherwise ``None``.
+    """
+    if st.session_state.get("data_mode") != "uploaded":
+        return None, "demo"
+    store = st.session_state.get("seller_data", {}) or {}
+    if module == "integrity":
+        df = store.get("integrity")
+    elif module in ("resilience", "forecasting"):
+        df = store.get("inventory")
+    else:
+        df = None
+    if df is None or (hasattr(df, "empty") and df.empty):
+        return None, "demo"
+    return df, "uploaded"
+
+
+def _data_source_badge(source: str, module_label: str) -> None:
+    """Render the small "where this data came from" badge at page top."""
+    if source == "uploaded":
+        st.markdown(
+            f'<div class="src-badge src-badge-uploaded">'
+            "Showing results from your uploaded data."
+            "</div>",
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            f'<div class="src-badge src-badge-demo">'
+            f"Showing sample data — upload your own on the Home page to "
+            f"run this on your {module_label}."
+            "</div>",
+            unsafe_allow_html=True,
+        )
 
 
 # Six baseline forecasting methods exposed on the auto_select page strip.
@@ -497,6 +573,56 @@ def inject_css() -> None:
             border-color: {COLOR_ACCENT};
             font-weight: 600;
         }}
+        /* Per-page data-source badge (sample vs. uploaded). */
+        .src-badge {{
+            display: inline-block;
+            font-size: 0.78rem;
+            font-weight: 600;
+            padding: 0.32rem 0.7rem;
+            border-radius: 999px;
+            margin-bottom: 1rem;
+            letter-spacing: 0.02em;
+        }}
+        .src-badge-uploaded {{
+            background: rgba(46, 125, 50, 0.10);
+            color: {COLOR_SUCCESS};
+            border: 1px solid rgba(46, 125, 50, 0.40);
+        }}
+        .src-badge-demo {{
+            background: {COLOR_NEUTRAL_200};
+            color: {COLOR_NEUTRAL_600};
+            border: 1px solid {COLOR_NEUTRAL_300};
+        }}
+        .upload-status {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin: 0.5rem 0 0.85rem;
+        }}
+        .upload-status .pill {{
+            font-size: 0.82rem;
+            font-weight: 600;
+            padding: 0.28rem 0.7rem;
+            border-radius: 999px;
+            border: 1px solid {COLOR_NEUTRAL_300};
+            background: {COLOR_NEUTRAL_100};
+            color: {COLOR_NEUTRAL_600};
+        }}
+        .upload-status .pill-ok {{
+            background: rgba(46, 125, 50, 0.10);
+            color: {COLOR_SUCCESS};
+            border-color: rgba(46, 125, 50, 0.40);
+        }}
+        .upload-status .pill-error {{
+            background: rgba(198, 40, 40, 0.10);
+            color: {COLOR_DANGER};
+            border-color: rgba(198, 40, 40, 0.40);
+        }}
+        .upload-privacy {{
+            font-size: 0.82rem;
+            color: {COLOR_NEUTRAL_600};
+            margin-top: 0.5rem;
+        }}
     </style>
     """
     st.markdown(css, unsafe_allow_html=True)
@@ -768,12 +894,150 @@ def render_home() -> None:
         unsafe_allow_html=True,
     )
 
+    render_upload_section()
+
     st.markdown("")
     cta_cols = st.columns(2)
     with cta_cols[0]:
         st.link_button("View source on GitHub →", GITHUB_URL, width="stretch")
     with cta_cols[1]:
         st.link_button("Read the article series →", ARTICLES_URL, width="stretch")
+
+
+def render_upload_section() -> None:
+    """Home-page section: optionally upload one or two CSVs and have
+    every module pick them up.
+    """
+    with st.expander("Use your own data (optional)", expanded=False):
+        st.write(
+            "Upload one or two CSV files here and every tool on the "
+            "left will switch to your data automatically. Skip this and "
+            "keep clicking around — every page works on the built-in "
+            "sample data too."
+        )
+        st.markdown(
+            '<div class="upload-privacy">'
+            "Your file is processed in your browser session and is not "
+            "stored, saved to disk, or sent anywhere."
+            "</div>",
+            unsafe_allow_html=True,
+        )
+
+        tab_int, tab_inv = st.tabs(
+            ["Listing-quality data (Integrity)",
+             "Inventory + sales history (Resilience & Forecasting)"]
+        )
+
+        with tab_int:
+            st.caption(
+                "One row with your seller-performance metrics. Drives "
+                "the Marketplace Integrity scorecard."
+            )
+            st.download_button(
+                "Download template",
+                data=du.make_integrity_template_csv(),
+                file_name="msmt_integrity_template.csv",
+                mime="text/csv",
+                key="dl_integrity",
+            )
+            up_int = st.file_uploader(
+                "Upload your listing-quality CSV",
+                type=["csv"],
+                key="up_integrity",
+                accept_multiple_files=False,
+            )
+            if up_int is not None:
+                df, errors = du.parse_integrity_csv(up_int.getvalue())
+                st.session_state["seller_data"]["integrity"] = df
+                st.session_state["upload_errors"]["integrity"] = errors
+                if errors:
+                    for msg in errors:
+                        st.error(msg)
+                else:
+                    st.success("Listing-quality file looks good.")
+
+        with tab_inv:
+            st.caption(
+                "Long format: one row per (SKU, day). The same upload "
+                "feeds both the Supply Resilience heatmap and the Demand "
+                "Forecasting page — you only upload it once."
+            )
+            st.download_button(
+                "Download template",
+                data=du.make_inventory_template_csv(),
+                file_name="msmt_inventory_template.csv",
+                mime="text/csv",
+                key="dl_inventory",
+            )
+            up_inv = st.file_uploader(
+                "Upload your inventory + sales CSV",
+                type=["csv"],
+                key="up_inventory",
+                accept_multiple_files=False,
+            )
+            if up_inv is not None:
+                df, errors = du.parse_inventory_csv(up_inv.getvalue())
+                st.session_state["seller_data"]["inventory"] = df
+                st.session_state["upload_errors"]["inventory"] = errors
+                if errors:
+                    for msg in errors:
+                        st.error(msg)
+                else:
+                    st.success(
+                        f"Inventory + sales file looks good "
+                        f"({df['sku_id'].nunique()} SKUs, {len(df)} rows)."
+                    )
+
+        # Status pills.
+        store = st.session_state.get("seller_data", {})
+        errs = st.session_state.get("upload_errors", {})
+        pills = []
+        for key, label in [("integrity", "Listing quality"),
+                           ("inventory", "Inventory + sales")]:
+            if errs.get(key):
+                pills.append(f'<span class="pill pill-error">✗ {label}</span>')
+            elif store.get(key) is not None:
+                pills.append(f'<span class="pill pill-ok">✓ {label}</span>')
+            else:
+                pills.append(f'<span class="pill">○ {label}</span>')
+        st.markdown(
+            f'<div class="upload-status">{"".join(pills)}</div>',
+            unsafe_allow_html=True,
+        )
+
+        # Mode toggle.
+        any_valid = any(
+            store.get(k) is not None and not errs.get(k)
+            for k in ("integrity", "inventory")
+        )
+        current = st.session_state.get("data_mode", "demo")
+        cols = st.columns([1, 1])
+        with cols[0]:
+            if current == "demo":
+                if st.button(
+                    "Use my uploaded data",
+                    type="primary",
+                    disabled=not any_valid,
+                    key="btn_use_uploaded",
+                    help=None if any_valid
+                    else "Upload at least one valid CSV above to switch.",
+                ):
+                    st.session_state["data_mode"] = "uploaded"
+                    st.rerun()
+            else:
+                if st.button(
+                    "Switch back to sample data",
+                    key="btn_use_demo",
+                ):
+                    st.session_state["data_mode"] = "demo"
+                    st.rerun()
+        with cols[1]:
+            mode_label = (
+                "Currently using: your uploaded data"
+                if current == "uploaded"
+                else "Currently using: built-in sample data"
+            )
+            st.caption(mode_label)
 
 
 _RATING_BG = {
@@ -828,70 +1092,86 @@ def render_integrity() -> None:
         unsafe_allow_html=True,
     )
 
-    mode = st.radio(
-        "Input mode",
-        ["Use a demo seller", "Enter my own metrics"],
-        horizontal=True,
-    )
+    uploaded_df, source = get_active_data("integrity")
+    _data_source_badge(source, module_label="listing-quality data")
 
-    if mode == "Use a demo seller":
-        seed = st.slider("Demo seller seed", 0, 100, 42, 1)
-        scorecard = scorecard_for_synthetic_seller(seed=seed)
-        metrics = {
-            name: info["value"]
-            for name, info in scorecard["signal_scores"].items()
-        }
-    else:
-        st.caption("Defaults are at each signal's 'good' benchmark.")
-        metrics: Dict[str, float] = {}
-        cols = st.columns(2)
-        for i, sig in enumerate(SIGNALS):
-            col = cols[i % 2]
-            with col:
-                if sig.name == "image_count":
-                    metrics[sig.name] = float(
-                        st.number_input(
-                            sig.name.replace("_", " "),
-                            min_value=0,
-                            max_value=15,
-                            value=int(sig.benchmark_good),
-                            step=1,
-                            help=sig.description,
-                        )
-                    )
-                elif sig.name == "listing_quality_score":
-                    metrics[sig.name] = float(
-                        st.slider(
-                            sig.name.replace("_", " "),
-                            min_value=0,
-                            max_value=100,
-                            value=int(sig.benchmark_good),
-                            help=sig.description,
-                        )
-                    )
-                elif sig.name == "customer_feedback_score":
-                    metrics[sig.name] = float(
-                        st.slider(
-                            sig.name.replace("_", " "),
-                            min_value=1.0,
-                            max_value=5.0,
-                            value=float(sig.benchmark_good),
-                            step=0.1,
-                            help=sig.description,
-                        )
-                    )
-                else:
-                    metrics[sig.name] = float(
-                        st.slider(
-                            sig.name.replace("_", " "),
-                            min_value=0.0,
-                            max_value=1.0,
-                            value=float(sig.benchmark_good),
-                            step=0.01,
-                            help=sig.description,
-                        )
-                    )
+    if source == "uploaded" and uploaded_df is not None:
+        # Uploaded path: pull the 10-signal row straight out.
+        metrics = du.integrity_dataframe_to_metrics(uploaded_df)
         scorecard = compute_scorecard(metrics)
+        st.caption("Score computed from your uploaded CSV.")
+    else:
+        if (st.session_state.get("data_mode") == "uploaded"
+                and st.session_state["seller_data"].get("integrity") is None):
+            st.info(
+                "You opted into uploaded data but haven't given me a "
+                "listing-quality CSV yet — running this page on sample "
+                "data. Add the file on the Home page to switch."
+            )
+        mode = st.radio(
+            "Input mode",
+            ["Use a demo seller", "Enter my own metrics"],
+            horizontal=True,
+        )
+
+        if mode == "Use a demo seller":
+            seed = st.slider("Demo seller seed", 0, 100, 42, 1)
+            scorecard = scorecard_for_synthetic_seller(seed=seed)
+            metrics = {
+                name: info["value"]
+                for name, info in scorecard["signal_scores"].items()
+            }
+        else:
+            st.caption("Defaults are at each signal's 'good' benchmark.")
+            metrics: Dict[str, float] = {}
+            cols = st.columns(2)
+            for i, sig in enumerate(SIGNALS):
+                col = cols[i % 2]
+                with col:
+                    if sig.name == "image_count":
+                        metrics[sig.name] = float(
+                            st.number_input(
+                                sig.name.replace("_", " "),
+                                min_value=0,
+                                max_value=15,
+                                value=int(sig.benchmark_good),
+                                step=1,
+                                help=sig.description,
+                            )
+                        )
+                    elif sig.name == "listing_quality_score":
+                        metrics[sig.name] = float(
+                            st.slider(
+                                sig.name.replace("_", " "),
+                                min_value=0,
+                                max_value=100,
+                                value=int(sig.benchmark_good),
+                                help=sig.description,
+                            )
+                        )
+                    elif sig.name == "customer_feedback_score":
+                        metrics[sig.name] = float(
+                            st.slider(
+                                sig.name.replace("_", " "),
+                                min_value=1.0,
+                                max_value=5.0,
+                                value=float(sig.benchmark_good),
+                                step=0.1,
+                                help=sig.description,
+                            )
+                        )
+                    else:
+                        metrics[sig.name] = float(
+                            st.slider(
+                                sig.name.replace("_", " "),
+                                min_value=0.0,
+                                max_value=1.0,
+                                value=float(sig.benchmark_good),
+                                step=0.01,
+                                help=sig.description,
+                            )
+                        )
+            scorecard = compute_scorecard(metrics)
 
     # Headline: gauge + metric tiles
     head_cols = st.columns([2, 1])
@@ -989,15 +1269,31 @@ def render_integrity() -> None:
             "category volume is across SKUs. Thresholds shown are the U.S. "
             "Department of Justice merger-review thresholds."
         )
-        cc_cols = st.columns(2)
-        with cc_cols[0]:
-            n_skus_conc = st.slider("SKUs in synthetic catalog", 10, 100, 50, 5,
-                                    key="conc_n_skus")
-        with cc_cols[1]:
-            seed_conc = st.number_input("Catalog seed", value=42, step=1, key="conc_seed")
 
-        with st.spinner("Generating synthetic catalog…"):
-            catalog = _cached_seller_data(int(n_skus_conc), 365, int(seed_conc))
+        # Concentration needs a `category` column. If the user uploaded
+        # an inventory file with one, we use it; otherwise we fall back
+        # to the synthetic catalog for *this section only*.
+        inv_df, inv_src = get_active_data("resilience")
+        if inv_src == "uploaded" and inv_df is not None and "category" in inv_df.columns:
+            catalog = inv_df
+            st.caption("Concentration computed from your uploaded inventory file.")
+        else:
+            if inv_src == "uploaded" and inv_df is not None:
+                st.info(
+                    "Your uploaded file doesn't include a 'category' "
+                    "column, so this section is running on the built-in "
+                    "synthetic catalog. Add a 'category' column to your "
+                    "CSV to switch."
+                )
+            cc_cols = st.columns(2)
+            with cc_cols[0]:
+                n_skus_conc = st.slider("SKUs in synthetic catalog", 10, 100, 50, 5,
+                                        key="conc_n_skus")
+            with cc_cols[1]:
+                seed_conc = st.number_input("Catalog seed", value=42, step=1, key="conc_seed")
+
+            with st.spinner("Generating synthetic catalog…"):
+                catalog = _cached_seller_data(int(n_skus_conc), 365, int(seed_conc))
         audit = concentration_audit(catalog)
 
         st.dataframe(audit["summary_df"].round(2), width="stretch", hide_index=True)
@@ -1036,17 +1332,49 @@ def render_resilience() -> None:
         unsafe_allow_html=True,
     )
 
-    cfg_cols = st.columns(3)
-    with cfg_cols[0]:
-        n_skus = st.slider("Number of SKUs", 10, 100, 50, 5)
-    with cfg_cols[1]:
-        seed = st.number_input("Seed", value=42, step=1, key="res_seed")
-    with cfg_cols[2]:
-        service_level = st.selectbox("Service level", [0.90, 0.95, 0.97, 0.98, 0.99], index=1)
+    uploaded_df, source = get_active_data("resilience")
+    _data_source_badge(source, module_label="inventory + sales history")
 
-    with st.spinner("Generating catalog and running resilience pipeline…"):
-        catalog = _cached_seller_data(int(n_skus), 365, int(seed))
-        heatmap = _cached_heatmap(catalog, float(service_level))
+    if source == "uploaded" and uploaded_df is not None:
+        cfg_cols = st.columns(2)
+        with cfg_cols[0]:
+            st.metric("SKUs in your upload", int(uploaded_df["sku_id"].nunique()))
+        with cfg_cols[1]:
+            service_level = st.selectbox(
+                "Service level",
+                [0.90, 0.95, 0.97, 0.98, 0.99],
+                index=1,
+                key="res_sl_up",
+            )
+        catalog = uploaded_df
+    else:
+        if (st.session_state.get("data_mode") == "uploaded"
+                and st.session_state["seller_data"].get("inventory") is None):
+            st.info(
+                "You opted into uploaded data but haven't given me an "
+                "inventory + sales CSV yet — running this page on sample "
+                "data. Add the file on the Home page to switch."
+            )
+        cfg_cols = st.columns(3)
+        with cfg_cols[0]:
+            n_skus = st.slider("Number of SKUs", 10, 100, 50, 5)
+        with cfg_cols[1]:
+            seed = st.number_input("Seed", value=42, step=1, key="res_seed")
+        with cfg_cols[2]:
+            service_level = st.selectbox(
+                "Service level", [0.90, 0.95, 0.97, 0.98, 0.99], index=1
+            )
+        with st.spinner("Generating catalog…"):
+            catalog = _cached_seller_data(int(n_skus), 365, int(seed))
+
+    with st.spinner("Running resilience pipeline…"):
+        try:
+            heatmap = stockout_heatmap_data(catalog, service_level=float(service_level))
+        except Exception as exc:  # defensive — keep the page alive on bad upload
+            st.error(
+                f"Couldn't run the resilience pipeline on this data: {exc}."
+            )
+            return
 
     counts = heatmap["risk_level"].value_counts().reindex(
         ["critical", "high", "medium", "low"]
@@ -1237,29 +1565,61 @@ def render_forecasting() -> None:
         unsafe_allow_html=True,
     )
 
-    cfg_cols = st.columns(3)
-    with cfg_cols[0]:
-        pattern = st.selectbox("Demand pattern", list(PATTERNS), index=0)
-    with cfg_cols[1]:
-        seed = st.number_input("SKU seed", value=42, step=1, key="fc_seed")
-    with cfg_cols[2]:
-        horizon = st.slider("Forecast horizon (days)", 7, 60, 28, 1)
+    uploaded_df, source = get_active_data("forecasting")
+    _data_source_badge(source, module_label="inventory + sales history")
 
-    with st.spinner("Generating SKU and running forecast…"):
-        try:
-            catalog = _cached_seller_data(50, 365, int(seed))
-            sku_ids = catalog[catalog["pattern"] == pattern]["sku_id"].unique()
-            if len(sku_ids) == 0:
-                st.warning(
-                    f"No synthetic SKUs of pattern '{pattern}' at seed "
-                    f"{seed}. Try a different seed."
+    if source == "uploaded" and uploaded_df is not None:
+        all_skus = sorted(uploaded_df["sku_id"].unique().tolist())
+        sel_cols = st.columns(2)
+        with sel_cols[0]:
+            sku_choice = st.selectbox("Pick a SKU", all_skus, key="fc_sku_up")
+        with sel_cols[1]:
+            horizon = st.slider("Forecast horizon (days)", 7, 60, 28, 1,
+                                key="fc_horizon_up")
+        sub = uploaded_df[uploaded_df["sku_id"] == sku_choice]
+        with st.spinner("Running forecast on your data…"):
+            try:
+                result = run_forecast(sub, horizon=int(horizon))
+                # Wrap the run_forecast dict in the extras the page renderer
+                # below expects (series + dates + the pattern-derived rationale).
+                result["series"] = (
+                    sub.sort_values("date")["units_sold"].astype(float).to_numpy()
                 )
+                result["dates"] = pd.DatetimeIndex(sub.sort_values("date")["date"])
+            except Exception as exc:
+                st.error(f"Forecast failed on this SKU: {exc}")
                 return
-            sub = catalog[catalog["sku_id"] == sku_ids[0]]
-            result = _force_method(sub, pattern, int(horizon))
-        except Exception as exc:  # pragma: no cover - defensive UI guard
-            st.error(f"Forecast failed: {exc}")
-            return
+    else:
+        if (st.session_state.get("data_mode") == "uploaded"
+                and st.session_state["seller_data"].get("inventory") is None):
+            st.info(
+                "You opted into uploaded data but haven't given me an "
+                "inventory + sales CSV yet — running this page on sample "
+                "data. Add the file on the Home page to switch."
+            )
+        cfg_cols = st.columns(3)
+        with cfg_cols[0]:
+            pattern = st.selectbox("Demand pattern", list(PATTERNS), index=0)
+        with cfg_cols[1]:
+            seed = st.number_input("SKU seed", value=42, step=1, key="fc_seed")
+        with cfg_cols[2]:
+            horizon = st.slider("Forecast horizon (days)", 7, 60, 28, 1)
+
+        with st.spinner("Generating SKU and running forecast…"):
+            try:
+                catalog = _cached_seller_data(50, 365, int(seed))
+                sku_ids = catalog[catalog["pattern"] == pattern]["sku_id"].unique()
+                if len(sku_ids) == 0:
+                    st.warning(
+                        f"No synthetic SKUs of pattern '{pattern}' at seed "
+                        f"{seed}. Try a different seed."
+                    )
+                    return
+                sub = catalog[catalog["sku_id"] == sku_ids[0]]
+                result = _force_method(sub, pattern, int(horizon))
+            except Exception as exc:  # pragma: no cover - defensive UI guard
+                st.error(f"Forecast failed: {exc}")
+                return
 
     # Method selection (wrapped in a section card)
     method = result["method_used"]
@@ -1470,6 +1830,7 @@ def main() -> None:
         layout="wide",
         initial_sidebar_state="expanded",
     )
+    _init_session_state()
     inject_css()
     page = render_sidebar()
 
